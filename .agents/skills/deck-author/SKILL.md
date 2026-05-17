@@ -16,7 +16,8 @@ Use this skill to author Markdown that converts cleanly through [md2ppt](https:/
 4. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
 5. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
 6. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound `.png` into `attachments/` before referencing it.
-7. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
+7. After drafting or editing slide copy, run a language-style pass to check whether any slide text still uses sentence-style prose or sentence endings, especially in Korean decks.
+8. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
 
 ## File Structure
 
@@ -108,6 +109,7 @@ For Korean slide decks:
 
 - Keep spacing, punctuation, and terminology consistent.
 - Prefer concise business Korean over translated-English phrasing.
+- After writing, check slide-visible text for sentence-style Korean endings and convert accidental prose into noun-ending or outline-style phrases. Use sentence-style Korean only in limited practice-step instructions where prose is necessary for clear execution.
 - Avoid unnecessary English loanwords when a natural Korean term is clearer.
 - Preserve domain terms, product names, model names, API names, and quoted source wording.
 - Normalize repeated terms into one canonical form, such as choosing one of `워크플로우`, `작업 흐름`, or `프로세스`.
@@ -155,6 +157,16 @@ When asked to polish, proofread, or refine a deck:
 - Use fenced code blocks for code; include the language tag for syntax highlighting.
 
 Read `references/md2ppt-format.md` when you need the full syntax, conversion pipeline, layouts, or examples.
+
+## Prose-Ending Check
+
+Before final delivery, perform a prose-ending check on all slide-visible text. Confirm that titles, bullets, labels, and table cells are phrase-based rather than narrative sentences.
+
+For Korean decks, explicitly scan for sentence-style endings such as `-다`, `-요`, `-습니다`, `-합니다`, `-된다`, `-한다`, `-했다`, `-이다`, `-입니다`, `-있다`, and `-없다`. Revise accidental prose into compact noun-ending or outline-style copy.
+
+For slide-visible text, allow sentence-style Korean only when explaining hands-on practice procedures and only when a phrase would make the step unclear. Keep these sentences short and procedural. Do not use this exception for concept explanations, summaries, benefits, labels, headings, tables, or general instructional copy.
+
+Speaker notes may use natural prose. Direct quotes and legal/source wording may preserve their original sentence endings.
 
 ## Validation And Compile
 
