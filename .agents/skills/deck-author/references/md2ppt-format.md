@@ -103,7 +103,7 @@ Current md2ppt code collects notes in slide JSON. Confirm the selected `json2ppt
 
 ## Images And Assets
 
-Use local image files. Supported practical extensions are `png`, `jpg`, `jpeg`, `gif`, `svg`, and `webp`; `json2pptx.py` opens images with Pillow, so prefer `png` or `jpg` for reliable compilation.
+Use local image files. Supported practical extensions are `png`, `jpg`, `jpeg`, `gif`, `svg`, and `webp`; `json2pptx.py` opens images with Pillow. For slide visuals authored through this skill, save the final deck-referenced asset as a transparent `.png` with an alpha channel.
 
 Use a standalone image line:
 
@@ -117,8 +117,20 @@ If a needed slide visual does not exist:
 
 1. Use `$imagegen` to generate or edit the raster asset.
 2. Move the selected project-bound output into `attachments/`.
-3. Reference the saved relative path from the module Markdown.
-4. Avoid leaving a deck-referenced image only under `$CODEX_HOME/generated_images`.
+3. Ensure the final saved asset is a transparent PNG.
+4. Reference the saved relative path from the module Markdown.
+5. Avoid leaving a deck-referenced image only under `$CODEX_HOME/generated_images`.
+
+Default slide image types:
+
+1. Concept diagram: 3-5 named elements and their relationships.
+2. Process image: workflow, flowchart, sequence, or timeline.
+3. System/technical structure image: architecture, data-flow, or component diagram.
+4. Case/example image: representative example, before/after comparison, result mockup, or comparison cards.
+5. Metaphor image: visual analogy for the deck's central message.
+6. Markup image: annotation on a provided screenshot or image; ask for the source screenshot/image if it is missing.
+
+These categories can be combined when the user request calls for a hybrid visual.
 
 ## Supported Markdown Content
 
@@ -173,7 +185,7 @@ Run direct compile from the root deck directory, or use absolute image paths, be
 - One slide should express one idea.
 - Use `***` when two areas must remain visually distinct.
 - Split long lists across slides instead of shrinking content.
-- Prefer diagrams, screenshots, and generated teaching visuals over decorative imagery.
+- Prefer diagrams, screenshots, generated teaching visuals, and requested hybrid visuals over decorative imagery.
 - Use tables only when there are few columns and rows.
 - Keep filenames stable, ASCII when practical, and URL-encode spaces if you hand-write paths.
 - Compile early when changing layout-heavy decks; placeholder behavior depends on the reference `.pptx`.

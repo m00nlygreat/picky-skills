@@ -15,7 +15,7 @@ Use this skill to author Markdown that converts cleanly through [md2ppt](https:/
 3. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
 4. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
 5. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
-6. Save image assets as project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound image into `attachments/` before referencing it.
+6. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound `.png` into `attachments/` before referencing it.
 7. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
 
 ## File Structure
@@ -68,6 +68,19 @@ Child module pattern:
 
 Use `###` to add an in-slide heading instead of starting a new slide.
 ```
+
+## Slide Image Types
+
+When planning or creating visuals, explicitly classify requested slide images using these six default types. These are defaults, not hard boundaries: if the user asks for an image that crosses categories, create the hybrid image that best serves the slide instead of forcing it into only one type.
+
+1. Concept diagram: a simple relationship map of the core idea, usually 3-5 named elements connected by lines. Keep in-image text to element names, not explanatory sentences.
+2. Process image: a workflow, flowchart, sequence, or timeline that shows the slide's steps. Prefer four or fewer steps with short labels and clear directional flow.
+3. System/technical structure image: an architecture, data-flow, or component diagram. Show the main actors, interface, processing layer, storage, model, or external services as named blocks.
+4. Case/example image: a representative example, before/after comparison, result mockup, or 2-3 comparison cards. Use real provided material when available; otherwise create a clearly illustrative example.
+5. Metaphor image: a visual analogy for the deck's message, such as scattered inputs becoming an organized structure or multiple streams converging into one output. Prefer little or no text.
+6. Markup image: annotations on a provided screenshot or image, using boxes, arrows, numbers, highlights, and short labels to point out key UI areas, issues, or comparison points. If no source screenshot or image is available, ask the user to provide one before making the markup image.
+
+All final deck-referenced images must be transparent PNG files. Source screenshots or references may arrive in other formats, but the asset saved under `attachments/` should be a `.png` with an alpha channel; preserve opaque screenshot/photo content when needed and keep any canvas, padding, or non-image background transparent.
 
 ## Authoring Rules
 
