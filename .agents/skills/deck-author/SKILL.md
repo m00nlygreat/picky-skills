@@ -109,7 +109,7 @@ For Korean slide decks:
 
 - Keep spacing, punctuation, and terminology consistent.
 - Prefer concise business Korean over translated-English phrasing.
-- After writing, check slide-visible text for sentence-style Korean endings and convert accidental prose into noun-ending or outline-style phrases. Use sentence-style Korean only in limited practice-step instructions where prose is necessary for clear execution.
+- After writing, check slide-visible text for sentence-style Korean endings and convert accidental prose into noun-ending or outline-style phrases. Use sentence-style Korean only in limited practice-step instructions where prose is necessary for clear execution, or in quoted text.
 - Avoid unnecessary English loanwords when a natural Korean term is clearer.
 - Preserve domain terms, product names, model names, API names, and quoted source wording.
 - Normalize repeated terms into one canonical form, such as choosing one of `워크플로우`, `작업 흐름`, or `프로세스`.
@@ -164,7 +164,7 @@ Before final delivery, perform a prose-ending check on all slide-visible text. C
 
 For Korean decks, explicitly scan for sentence-style endings such as `-다`, `-요`, `-습니다`, `-합니다`, `-된다`, `-한다`, `-했다`, `-이다`, `-입니다`, `-있다`, and `-없다`. Revise accidental prose into compact noun-ending or outline-style copy.
 
-For slide-visible text, allow sentence-style Korean only when explaining hands-on practice procedures and only when a phrase would make the step unclear. Keep these sentences short and procedural. Do not use this exception for concept explanations, summaries, benefits, labels, headings, tables, or general instructional copy.
+For slide-visible text, allow sentence-style Korean only when explaining hands-on practice procedures and only when a phrase would make the step unclear, or when preserving quoted text. Keep practice-procedure sentences short and procedural. Do not use this exception for concept explanations, summaries, benefits, labels, headings, tables, or general instructional copy.
 
 Speaker notes may use natural prose. Direct quotes and legal/source wording may preserve their original sentence endings.
 
