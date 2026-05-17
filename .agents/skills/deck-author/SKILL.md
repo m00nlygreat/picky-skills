@@ -1,6 +1,6 @@
 ---
 name: deck-author
-description: Create, refactor, validate, and compile Markdown slide decks for md2ppt. Use when Codex needs to produce a root deck Markdown file, embedded child Markdown modules, slide-ready assets, layout or note directives, tables, code blocks, image references, or a .pptx output through md2ppt.
+description: Create, refactor, polish, validate, and compile Markdown slide decks for md2ppt. Use when Codex needs to produce or edit a root deck Markdown file, embedded child Markdown modules, slide-ready assets, slide copy, language editing rules, layout or note directives, tables, code blocks, image references, or a .pptx output through md2ppt.
 ---
 
 # Md2ppt Deck Author
@@ -81,6 +81,64 @@ When planning or creating visuals, explicitly classify requested slide images us
 6. Markup image: annotations on a provided screenshot or image, using boxes, arrows, numbers, highlights, and short labels to point out key UI areas, issues, or comparison points. If no source screenshot or image is available, ask the user to provide one before making the markup image.
 
 All final deck-referenced images must be transparent PNG files. Source screenshots or references may arrive in other formats, but the asset saved under `attachments/` should be a `.png` with an alpha channel; preserve opaque screenshot/photo content when needed and keep any canvas, padding, or non-image background transparent.
+
+## Language And Editing
+
+Treat language editing as part of slide design, not as a separate proofreading pass. Make slide copy concise, consistent, and presentation-ready while preserving the original meaning, evidence level, and speaker intent.
+
+### Default Tone
+
+Use a clear, professional, instructional tone unless the user specifies otherwise. Avoid overly casual phrasing, exaggerated marketing copy, vague motivational language, and unsupported strengthening of claims.
+
+For Korean decks, default to compact business Korean. Use outline-style Korean (`개조식`) and noun-ending phrases by default for slide bullets, labels, and short supporting copy. Avoid excessive honorific endings on slides unless the deck's audience or brand voice requires them.
+
+### Slide Copy Rules
+
+- Keep each slide centered on one message.
+- Prefer short phrases over full paragraphs.
+- Use parallel structure within bullet lists.
+- Do not mix noun-phrase bullets and sentence-style bullets in the same list unless there is a clear reason.
+- Move nuance, transitions, examples, and caveats into speaker notes instead of crowding the slide.
+- Replace abstract wording with concrete nouns, verbs, numbers, or examples.
+- Keep image labels, diagram labels, and chart annotations short; use element names rather than explanatory sentences.
+
+### Korean Editing Rules
+
+For Korean slide decks:
+
+- Keep spacing, punctuation, and terminology consistent.
+- Prefer concise business Korean over translated-English phrasing.
+- Avoid unnecessary English loanwords when a natural Korean term is clearer.
+- Preserve domain terms, product names, model names, API names, and quoted source wording.
+- Normalize repeated terms into one canonical form, such as choosing one of `워크플로우`, `작업 흐름`, or `프로세스`.
+- Use Arabic numerals for quantities, steps, dates, and measurable values unless the deck style requires otherwise.
+
+### Titles And Headings
+
+Prefer slide titles that state the slide's point, not just its topic.
+
+Weak:
+
+- Market Overview
+- 주요 기능
+- 문제점
+
+Better:
+
+- The Market Is Fragmented Across Three Buyer Groups
+- 반복 작업을 줄이는 세 가지 핵심 기능
+- 현재 프로세스는 검토 단계에서 병목이 발생
+
+### Editing Scope
+
+When asked to polish, proofread, or refine a deck:
+
+1. Fix obvious grammar, spelling, spacing, and punctuation issues.
+2. Tighten long sentences into slide-ready copy.
+3. Make headings and bullets structurally consistent.
+4. Preserve the original meaning, evidence level, and speaker intent.
+5. Flag ambiguous claims instead of silently inventing details.
+6. If the target audience or tone is unclear, use the default professional instructional tone and mention the assumption.
 
 ## Authoring Rules
 
