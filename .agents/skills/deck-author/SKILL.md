@@ -1,5 +1,5 @@
 ---
-name: md2ppt-deck-author
+name: deck-author
 description: Create, refactor, validate, and compile Markdown slide decks for md2ppt. Use when Codex needs to produce a root deck Markdown file, embedded child Markdown modules, slide-ready assets, layout or note directives, tables, code blocks, image references, or a .pptx output through md2ppt.
 ---
 
@@ -90,13 +90,13 @@ Read `references/md2ppt-format.md` when you need the full syntax, conversion pip
 Run the bundled checker from the project root:
 
 ```powershell
-python .\.agents\skills\md2ppt-deck-author\scripts\check_md2ppt_deck.py ".\deck-title.md"
+python .\.agents\skills\deck-author\scripts\check_md2ppt_deck.py ".\deck-title.md"
 ```
 
 Compile through the `md2ppt` CLI when a `.pptx` is requested:
 
 ```powershell
-python .\.agents\skills\md2ppt-deck-author\scripts\check_md2ppt_deck.py ".\deck-title.md" --compile --out ".\deck-title.pptx" --template default
+python .\.agents\skills\deck-author\scripts\check_md2ppt_deck.py ".\deck-title.md" --compile --out ".\deck-title.pptx" --template default
 ```
 
 List built-in templates with `md2ppt --list-templates`. Do not ask for or assume a local md2ppt repository path. If the checker reports missing assets or malformed embeds, fix the Markdown files before compiling again. If compilation fails because `md2ppt` is unavailable, report that the CLI is not installed or not on `PATH`.
