@@ -55,12 +55,13 @@ Add or maintain instructions like this, adjusted to the selected modules:
 ```
 ## 위키 관리
 
-- 이 저장소의 간단한 위키는 `wiki/`에 둔다.
+- 이 저장소의 간단한 위키는 [wiki](wiki/)에 둔다.
 - 위키 문서는 한국어로 짧고 명확하게 작성한다.
-- `wiki/REQUIREMENT.md`는 현재 요구사항 요약의 유지본이다. 요구사항을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- `wiki/MVP.md`는 현재 MVP 범위의 유지본이다. MVP 범위를 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- `wiki/TERMS.md`는 프로젝트 용어와 GUI 표시명의 유지본이다. 용어, 명명 기준, 화면 표시명을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- `wiki/LOG.md`에는 프로젝트 관련 중대 결정사항, 새로 알아낸 사실, 방향 변경을 시간순으로 남긴다.
+- 위키 문서나 프로젝트 문서를 참조할 때는 백틱 경로 대신 반드시 마크다운 링크와 프로젝트 기준 상대 경로를 사용한다. 예: [요구사항](wiki/REQUIREMENT.md).
+- [wiki/REQUIREMENT.md](wiki/REQUIREMENT.md)는 현재 요구사항 요약의 유지본이다. 요구사항을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
+- [wiki/MVP.md](wiki/MVP.md)는 현재 MVP 범위의 유지본이다. MVP 범위를 정리하거나 갱신할 때 이 파일을 함께 관리한다.
+- [wiki/TERMS.md](wiki/TERMS.md)는 프로젝트 용어와 GUI 표시명의 유지본이다. 용어, 명명 기준, 화면 표시명을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
+- [wiki/LOG.md](wiki/LOG.md)에는 프로젝트 관련 중대 결정사항, 새로 알아낸 사실, 방향 변경을 시간순으로 남긴다.
 - 원본 자료 폴더는 사용자가 요청하지 않는 한 수정하지 않는다.
 ```
 
@@ -69,8 +70,9 @@ Only include bullets for modules that exist or are being created, except for the
 ## Maintain
 
 - Keep wiki files as living summaries, not raw dumps.
-- Update `wiki/LOG.md` when a major decision, new fact, or direction change is made.
-- Update `wiki/TERMS.md` when naming, GUI labels, or forbidden/주의 표현 change.
-- Update `wiki/REQUIREMENT.md` when current requirements are summarized or changed.
-- Update `wiki/MVP.md` when scope, exclusions, or MVP workflow changes.
+- When referencing wiki or project documents, use Markdown links with project-relative paths instead of backticked paths. Example: `[요구사항](wiki/REQUIREMENT.md)`.
+- Update [wiki/LOG.md](wiki/LOG.md) when a major decision, new fact, or direction change is made.
+- Update [wiki/TERMS.md](wiki/TERMS.md) when naming, GUI labels, or forbidden/주의 표현 change.
+- Update [wiki/REQUIREMENT.md](wiki/REQUIREMENT.md) when current requirements are summarized or changed.
+- Update [wiki/MVP.md](wiki/MVP.md) when scope, exclusions, or MVP workflow changes.
 - Do not edit original source material folders such as `requirement/` unless the user asks.
