@@ -114,6 +114,9 @@ For Korean decks, default to compact business Korean. Use outline-style Korean (
 - Keep each slide centered on one message.
 - Prefer short phrases over full paragraphs.
 - Use parallel structure within bullet lists.
+- Use Markdown inline emphasis deliberately: apply `**bold**` to the key term, number, decision, contrast, or takeaway that should catch the audience's eye; use `*italic*` sparingly for nuance, labels, cited wording, or secondary emphasis.
+- Use Markdown inline code for literal tokens such as commands, file paths, filenames, API names, model names, environment variables, configuration keys, code identifiers, and exact UI or CLI values.
+- Keep emphasis selective. Do not bold entire bullets, stack multiple emphasis styles on the same phrase without a clear reason, or emphasize so many words that the slide loses hierarchy.
 - Do not mix noun-phrase bullets and sentence-style bullets in the same list unless there is a clear reason.
 - Move nuance, transitions, examples, and caveats into speaker notes instead of crowding the slide.
 - Replace abstract wording with concrete nouns, verbs, numbers, or examples.
