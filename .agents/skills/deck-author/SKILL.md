@@ -11,13 +11,15 @@ Use this skill to author Markdown that converts cleanly through [md2ppt](https:/
 ## Workflow
 
 1. Identify the deck root, target audience, duration, and source material.
-2. Create a root Markdown file with deck-level YAML frontmatter that includes `title`. If compiling a lesson `text.md` directly, add YAML frontmatter with `title` there too.
-3. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
-4. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
-5. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
-6. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound `.png` into `attachments/` before referencing it.
-7. After drafting or editing slide copy, run a language-style pass to check whether any slide text still uses sentence-style prose or sentence endings, especially in Korean decks.
-8. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
+2. Before writing slide content, perform Slide Intent & Composition Planning for each slide or section.
+3. Create a root Markdown file with deck-level YAML frontmatter that includes `title`. If compiling a lesson `text.md` directly, add YAML frontmatter with `title` there too.
+4. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
+5. Before adding embedded child Markdown references to the root deck, show the proposed embed list and get user confirmation.
+6. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
+7. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
+8. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound `.png` into `attachments/` before referencing it.
+9. After drafting or editing slide copy, run a language-style pass to check whether any slide text still uses sentence-style prose or sentence endings, especially in Korean decks.
+10. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
 
 ## File Structure
 
@@ -69,6 +71,20 @@ Child module pattern:
 
 Use `###` to add an in-slide heading instead of starting a new slide.
 ```
+
+## Slide Intent & Composition Planning
+
+Before writing slide content, first plan the intended role and composition of each slide. Do not start filling in body copy, bullets, charts, images, tables, or speaker notes until this planning step is complete.
+
+For each slide, define:
+
+1. Slide intent: what is the one thing this slide should make the audience understand, believe, decide, or feel? Express this as a single clear sentence, not a topic label.
+2. Audience transition: what does the audience likely think before seeing this slide, and what should they think after seeing it? The slide should move the audience across that gap.
+3. Narrative role: why does this slide exist at this point in the deck? Decide whether it sets context, makes a claim, proves a point, compares options, resolves tension, drives a decision, or performs another specific job.
+4. Composition strategy: decide the necessary elements before writing them, such as the headline or takeaway, primary visual/chart/diagram/table/image, supporting evidence, annotations or callouts, and minimal explanatory text. Assign each element a job and remove any element that does not support the slide intent.
+5. Content boundary: decide what this slide should not cover. If a point belongs in another slide, move it there instead of overloading the current slide.
+
+Only after this planning step should the slide be drafted. A slide is not a place to pour in available information; it is a deliberately designed step in the audience's reasoning.
 
 ## Slide Image Types
 
@@ -145,6 +161,7 @@ When asked to polish, proofread, or refine a deck:
 ## Authoring Rules
 
 - Any Markdown file passed directly to `md2ppt` must start with YAML frontmatter containing `title`; otherwise the generated PPTX may have an empty or broken title slide.
+- Before inserting standalone child Markdown embeds such as `![](modules/01-intro.md)` into the root deck, present the intended embed paths and order to the user and wait for confirmation.
 - Use standalone `![](child.md)` lines for embeds. `flatten.py` only expands Markdown embeds that occupy the full line.
 - Use standalone image lines. Local image files are inserted into picture placeholders; inline images are not a reliable slide content pattern.
 - Do not put a table and an image on the same slide. Treat tables and images as conceptually equivalent explanatory formats; choose one, or split them into separate slides when both are needed.
