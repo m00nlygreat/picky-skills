@@ -17,8 +17,8 @@ Use this skill to author Markdown that converts cleanly through [md2ppt](https:/
 5. Before adding embedded child Markdown references to the root deck, show the proposed embed list and get user confirmation.
 6. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
 7. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
-8. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, use `$imagegen` and move the final project-bound `.png` into `attachments/` before referencing it.
-9. After drafting or editing slide copy, run a language-style pass to check whether any slide text still uses sentence-style prose or sentence endings, especially in Korean decks.
+8. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, first try to find a relevant source or reference image through internet search when that would produce a more accurate or recognizable visual; otherwise use `$imagegen`. Move the final project-bound `.png` into `attachments/` before referencing it.
+9. After drafting or editing slide copy, run the qualitative validation pass to check prose endings, slide visual density, and Markdown formatting richness.
 10. Validate the deck structure before final delivery. Compile only if the user wants a `.pptx`; assume `md2ppt` is installed as a CLI command on `PATH`. Use built-in templates by name with `--template`; use `--ref` only for an explicit external `.pptx` template path.
 
 ## File Structure
@@ -99,6 +99,8 @@ When planning or creating visuals, explicitly classify requested slide images us
 
 All final deck-referenced images must be transparent PNG files. Source screenshots or references may arrive in other formats, but the asset saved under `attachments/` should be a `.png` with an alpha channel; preserve opaque screenshot/photo content when needed and keep any canvas, padding, or non-image background transparent.
 
+When a slide needs a concrete object, product, place, person, UI, case, or other reality-based visual, try internet image search before generating a new image. Prefer authoritative, relevant, inspectable sources over generic stock-like images. Use `$imagegen` when search does not provide a suitable source, when the slide needs a conceptual or synthetic visual, or when licensing/source constraints make direct reuse inappropriate. Save only the final deck-ready asset under `attachments/` and keep any source attribution or usage caveat in speaker notes when needed.
+
 ## Language And Editing
 
 Treat language editing as part of slide design, not as a separate proofreading pass. Make slide copy concise, consistent, and presentation-ready while preserving the original meaning, evidence level, and speaker intent.
@@ -178,11 +180,15 @@ When asked to polish, proofread, or refine a deck:
 
 Read `references/md2ppt-format.md` when you need the full syntax, conversion pipeline, layouts, or examples.
 
-## Prose-Ending Check
+## Qualitative Validation
 
-Before final delivery, perform a prose-ending check on all slide-visible text. Confirm that titles, bullets, labels, and table cells are phrase-based rather than narrative sentences.
+Before final delivery, validate the deck qualitatively as a designed slide experience, not only as Markdown that compiles.
 
-For Korean decks, explicitly scan for sentence-style endings such as `-다`, `-요`, `-습니다`, `-합니다`, `-된다`, `-한다`, `-했다`, `-이다`, `-입니다`, `-있다`, and `-없다`. Revise accidental prose into compact noun-ending or outline-style copy.
+1. Prose-ending check: inspect all slide-visible text. Confirm that titles, bullets, labels, and table cells are phrase-based rather than narrative sentences. For Korean decks, explicitly scan for sentence-style endings such as `-다`, `-요`, `-습니다`, `-합니다`, `-된다`, `-한다`, `-했다`, `-이다`, `-입니다`, `-있다`, and `-없다`. Revise accidental prose into compact noun-ending or outline-style copy.
+
+2. Visual density check: inspect whether any slide looks too empty, especially slides that contain only a short heading plus sparse unillustrated text. If a slide feels bare or visually unmemorable, add a relevant visual, diagram, table, comparison, callout, or example. For image-based fixes, first try internet search to find a suitable concrete or reference image when the slide topic benefits from real-world specificity; use `$imagegen` for conceptual, synthetic, or custom visuals. Reference the final asset from `attachments/`.
+
+3. Formatting richness check: inspect whether slide text is plain, monotonous Markdown with no hierarchy beyond unstyled bullets. If it is too flat, rewrite the slide using richer Markdown structure such as selective `**bold**`, occasional `*italic*`, inline code for literal tokens, compact tables, blockquotes for cited statements, short callout-style lines, parallel bullet structure, or slide splits with `***`. Use formatting to clarify hierarchy, contrast, and scanning path; do not decorate every word.
 
 For slide-visible text, allow sentence-style Korean only when explaining hands-on practice procedures and only when a phrase would make the step unclear, or when preserving quoted text. Keep practice-procedure sentences short and procedural. Do not use this exception for concept explanations, summaries, benefits, labels, headings, tables, or general instructional copy.
 
