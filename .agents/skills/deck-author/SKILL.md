@@ -170,12 +170,13 @@ When asked to polish, proofread, or refine a deck:
 - Use standalone `![](child.md)` lines for embeds. `flatten.py` only expands Markdown embeds that occupy the full line.
 - Use standalone image lines. Local image files are inserted into picture placeholders; inline images are not a reliable slide content pattern.
 - Do not put a table and an image on the same slide. Treat tables and images as conceptually equivalent explanatory formats; choose one, or split them into separate slides when both are needed.
+- Treat pipe tables as block-level elements that occupy their entire placeholder. Do not continue with body text, headings, lists, or code in the same placeholder after a table; split with `***` or move the additional content to another slide.
 - Do not add `[layout]: # (...)` by default. md2ppt infers the layout from headings, slide breaks, and placeholder count.
 - Use `[layout]: # (layout_name)` only when intentionally forcing a layout that exists in the target template and cannot be inferred automatically. Do not add internal/default layout names such as `section_header`, `title_and_content`, or `two_content` unless the target template actually contains that layout name.
 - Use `[note]: # (speaker note text)` on its own line for slide notes.
 - Prefer `##` for normal content slides inside modules. Use `#` when a section divider or table-of-contents chapter is intentional.
 - Keep each slide to one main message. If a slide needs both text and media, separate areas with `***`.
-- Use pipe tables only for small tables that can fit in one slide placeholder.
+- Use pipe tables only for small tables that can fit in one slide placeholder by themselves.
 - Use fenced code blocks for code; include the language tag for syntax highlighting.
 
 Read `references/md2ppt-format.md` when you need the full syntax, conversion pipeline, layouts, or examples.
