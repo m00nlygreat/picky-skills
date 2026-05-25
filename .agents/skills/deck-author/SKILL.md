@@ -12,7 +12,7 @@ Use this skill to author Markdown that converts cleanly through [md2ppt](https:/
 
 1. Identify the deck root, target audience, duration, and source material.
 2. Before writing slide content, perform Slide Intent & Composition Planning for each slide or section.
-3. Create a root Markdown file with deck-level YAML frontmatter that includes `title`. If compiling a lesson `text.md` directly, add YAML frontmatter with `title` there too.
+3. Create a root Markdown file with deck-level YAML frontmatter that includes `title` and `materials`. If compiling a lesson `text.md` directly, add YAML frontmatter with `title` and `materials` there too.
 4. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
 5. Before adding embedded child Markdown references to the root deck, show the proposed embed list and get user confirmation.
 6. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `---` or `___` forces a new slide, and `***` splits placeholders inside the current slide.
@@ -42,6 +42,10 @@ Root file pattern:
 ---
 title: Deck Title
 author: Instructor Name
+materials:
+  - starter-files.zip
+  - sample-data.csv
+  - worksheet.md
 ---
 
 # Chapter Title
@@ -166,6 +170,8 @@ When asked to polish, proofread, or refine a deck:
 ## Authoring Rules
 
 - Any Markdown file passed directly to `md2ppt` must start with YAML frontmatter containing `title`; otherwise the generated PPTX may have an empty or broken title slide.
+- Add `materials` to the root YAML frontmatter as a YAML list. Keep it to a short list of hands-on materials learners will directly use during the lesson, such as starter files, sample datasets, worksheets, templates, prompt packs, screenshots, or exercise source files.
+- Exclude environment prerequisites from `materials`, including account creation, permissions, API keys, software installation, package installation, device/browser requirements, network access, and login status. If the lesson has no direct hands-on materials, use `materials: []`.
 - Before inserting standalone child Markdown embeds such as `![](modules/01-intro.md)` into the root deck, present the intended embed paths and order to the user and wait for confirmation.
 - Use standalone `![](child.md)` lines for embeds. `flatten.py` only expands Markdown embeds that occupy the full line.
 - Use standalone image lines. Local image files are inserted into picture placeholders; inline images are not a reliable slide content pattern.

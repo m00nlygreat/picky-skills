@@ -17,8 +17,13 @@ Only the root Markdown file should normally include YAML frontmatter:
 ---
 title: My Deck
 author: Alice
+materials:
+  - starter-files.zip
+  - sample-data.csv
 ---
 ```
+
+Use `materials` only for short, direct hands-on materials used during the lesson, such as starter files, sample datasets, worksheets, templates, prompt packs, screenshots, or exercise source files. Do not include environment prerequisites such as accounts, permissions, API keys, software or package installation, device/browser requirements, network access, or login status. If there are no direct hands-on materials, use `materials: []`.
 
 With the default built-in template selected by the `md2ppt` CLI, avoid `subtitle` in frontmatter unless the reference template's title slide has subtitle placeholder index `1`. The current default template only has a title placeholder.
 
