@@ -1,23 +1,25 @@
 ---
 name: interact
-description: Open a reusable local GUI for human-in-the-loop interaction and wait for the user's answer. Use when Codex needs the user to choose between visual options, answer multiple structured questions, fill a temporary form, approve a direction, or provide feedback that is awkward to collect in plain chat. The skill runs a project-scoped local server, updates the current prompt dynamically, and reads the submitted answer before continuing.
+description: Open a reusable local GUI for ongoing human-in-the-loop interaction. Use when Codex needs the user to choose between visual options, answer structured questions, fill a temporary form, approve a direction, or give iterative feedback that is awkward to collect in plain chat. The skill runs a project-scoped local server, updates the browser screen dynamically, supports multiple user submissions, and reads submitted JSON answers before continuing.
 ---
 
 # Interact
 
-Use this skill to ask the user through a local browser UI, then wait for the submitted JSON answer before continuing the task.
+Use this skill to collaborate with the user through a local browser UI. The same open screen can be updated by the agent repeatedly, and the user can submit multiple answers during one task.
 
 ## Workflow
 
 Run commands from the project root. The server and answer files are project-scoped under `.interact/`.
 
-1. Build a concise interaction schema.
+1. Build a concise interaction schema for the current step.
 2. Ensure the server is running or let `ask` start it.
-3. Send the schema with `ask`.
-4. Open the returned URL for the user, preferably with the in-app browser when available.
+3. Send the first schema with `ask`.
+4. Open the returned URL for the user, preferably with the in-app browser when available. Keep using this URL for later updates.
 5. When telling the user where to answer, provide the local server address as a Markdown link, such as `[Open interact GUI](http://127.0.0.1:5199/i/example)`. Do not show a bare localhost URL as the user-facing instruction.
-6. Wait for the answer with `wait` or use `ask --wait`.
-7. Read the returned JSON and continue the original task.
+6. Wait for the first answer with `wait` or use `ask --wait`.
+7. For iterative work, call `update --id <interaction-id>` with a new schema. The already-open browser page polls the server and re-renders automatically.
+8. Wait for the next answer with `wait --id <interaction-id> --after-seq <last-seq>`.
+9. Read the returned JSON and continue the original task.
 
 ## Commands
 
@@ -26,7 +28,9 @@ Use the bundled script:
 ```powershell
 node .agents/skills/interact/scripts/interact-server.js ensure
 node .agents/skills/interact/scripts/interact-server.js ask --schema path/to/schema.json
+node .agents/skills/interact/scripts/interact-server.js update --id <interaction-id> --schema path/to/next-schema.json
 node .agents/skills/interact/scripts/interact-server.js wait --id <interaction-id>
+node .agents/skills/interact/scripts/interact-server.js wait --id <interaction-id> --after-seq <last-seq>
 node .agents/skills/interact/scripts/interact-server.js status
 node .agents/skills/interact/scripts/interact-server.js stop
 ```
@@ -44,11 +48,25 @@ node .agents/skills/interact/scripts/interact-server.js ask --schema-json '{"tit
   "id": "interaction-id",
   "url": "http://127.0.0.1:5199/i/interaction-id",
   "markdownLink": "[Open interact GUI](http://127.0.0.1:5199/i/interaction-id)",
-  "answerFile": ".interact/answers/interaction-id.json"
+  "answerFile": ".interact/answers/interaction-id.json",
+  "transcriptFile": ".interact/answers/interaction-id.jsonl"
 }
 ```
 
 Use `markdownLink` when writing an interim user update.
+
+Each submitted answer includes a monotonically increasing `seq`:
+
+```json
+{
+  "id": "interaction-id",
+  "seq": 2,
+  "values": { "decision": "revise" },
+  "submittedAt": "2026-05-25T12:34:56.000Z"
+}
+```
+
+Use `seq` as the cursor for follow-up waits. The `.json` file contains the latest answer, and `.jsonl` contains the full transcript.
 
 ## Schema
 
@@ -96,8 +114,11 @@ Or objects:
 
 ## Reuse Rules
 
-- Reuse the same server during a conversation. Every `ask` call replaces the active GUI with a new interaction.
+- Reuse the same server during a conversation.
+- Use `ask` to start a new interaction. By default it clears prior answers for that interaction id; pass `--keep-answers` only when intentionally resuming a transcript.
+- Use `update --id <interaction-id>` to change the open screen without clearing previous answers.
 - Give each interaction a stable `id` only when the caller needs to refer to it later; otherwise let the script generate one.
-- Prefer `.interact/answers/<id>.json` or the `wait` command as the source of truth.
+- Prefer `wait --after-seq <last-seq>` as the source of truth during iterative loops.
+- Use `.interact/answers/<id>.json` for the latest answer and `.interact/answers/<id>.jsonl` for the full transcript.
 - Keep schemas small and task-specific. Do not use the GUI when a normal chat question is clearer.
 - Stop the server with `stop` when it is no longer useful.

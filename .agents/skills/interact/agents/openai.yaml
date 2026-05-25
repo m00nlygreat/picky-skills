@@ -1,4 +1,4 @@
 interface:
   display_name: "Interact"
-  short_description: "Ask users through a local GUI and wait for answers"
-  default_prompt: "Use $interact to ask me through a local GUI before making this decision."
+  short_description: "Use a local GUI for ongoing agent-user interaction"
+  default_prompt: "Use $interact to collaborate with me through a local GUI, updating the screen as the task progresses."

@@ -58,17 +58,21 @@ async function main() {
     const state = await ensureServer(root, args);
     const schema = await readSchema(args);
     const interaction = normalizeInteraction(schema, args);
-    await postJson(`${state.url}/api/interactions`, interaction);
+    await postJson(`${state.url}/api/interactions`, {
+      interaction,
+      clearAnswers: args["keep-answers"] ? false : true,
+    });
     const result = {
       id: interaction.id,
       url: `${state.url}/i/${encodeURIComponent(interaction.id)}`,
       markdownLink: `[Open interact GUI](${state.url}/i/${encodeURIComponent(interaction.id)})`,
       answerFile: path.join(dirs.answers, `${interaction.id}.json`),
+      transcriptFile: path.join(dirs.answers, `${interaction.id}.jsonl`),
       stateFile: dirs.stateFile,
     };
 
     if (args.wait) {
-      const answer = await waitForAnswer(state, interaction.id, Number(args.timeout || DEFAULT_TIMEOUT_SECONDS));
+      const answer = await waitForAnswer(state, interaction.id, Number(args.timeout || DEFAULT_TIMEOUT_SECONDS), Number(args["after-seq"] || 0));
       printJson({ ...result, answer });
       return;
     }
@@ -77,10 +81,27 @@ async function main() {
     return;
   }
 
+  if (command === "update") {
+    const state = await ensureServer(root, args);
+    const schema = await readSchema(args);
+    const id = required(args.id || schema.id, "--id or schema.id is required for update");
+    const interaction = normalizeInteraction({ ...schema, id }, args);
+    await postJson(`${state.url}/api/interactions/${encodeURIComponent(id)}`, { interaction });
+    printJson({
+      id,
+      url: `${state.url}/i/${encodeURIComponent(id)}`,
+      markdownLink: `[Open interact GUI](${state.url}/i/${encodeURIComponent(id)})`,
+      answerFile: path.join(dirs.answers, `${id}.json`),
+      transcriptFile: path.join(dirs.answers, `${id}.jsonl`),
+      stateFile: dirs.stateFile,
+    });
+    return;
+  }
+
   if (command === "wait") {
     const id = required(args.id, "--id is required for wait");
     const state = await ensureServer(root, args);
-    const answer = await waitForAnswer(state, id, Number(args.timeout || DEFAULT_TIMEOUT_SECONDS));
+    const answer = await waitForAnswer(state, id, Number(args.timeout || DEFAULT_TIMEOUT_SECONDS), Number(args["after-seq"] || 0));
     printJson(answer);
     return;
   }
@@ -174,10 +195,14 @@ async function serve(root, options) {
       }
 
       if (req.method === "POST" && requestUrl.pathname === "/api/interactions") {
-        const payload = normalizeInteraction(JSON.parse(await readBody(req) || "{}"), {});
+        const body = JSON.parse(await readBody(req) || "{}");
+        const payload = normalizeInteraction(body.interaction || body, {});
         await writeJson(path.join(dirs.prompts, `${payload.id}.json`), payload);
         await writeJson(dirs.activeFile, { id: payload.id, updatedAt: new Date().toISOString() });
-        await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
+        if (body.clearAnswers !== false) {
+          await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
+          await rmIfExists(path.join(dirs.answers, `${payload.id}.jsonl`));
+        }
         return sendJson(res, {
           ok: true,
           id: payload.id,
@@ -186,12 +211,30 @@ async function serve(root, options) {
         });
       }
 
+      if (req.method === "POST" && requestUrl.pathname.startsWith("/api/interactions/")) {
+        const parts = requestUrl.pathname.split("/").filter(Boolean);
+        const id = decodeURIComponent(parts[2] || "");
+        if (parts.length === 3) {
+          const body = JSON.parse(await readBody(req) || "{}");
+          const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
+          await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
+          await writeJson(dirs.activeFile, { id, updatedAt: new Date().toISOString() });
+          return sendJson(res, {
+            ok: true,
+            id,
+            url: `${url}/i/${encodeURIComponent(id)}`,
+            markdownLink: `[Open interact GUI](${url}/i/${encodeURIComponent(id)})`,
+          });
+        }
+      }
+
       if (req.method === "GET" && requestUrl.pathname.startsWith("/api/interactions/")) {
         const parts = requestUrl.pathname.split("/").filter(Boolean);
         const id = decodeURIComponent(parts[2] || "");
 
         if (parts[3] === "answer") {
-          const answer = await readJson(path.join(dirs.answers, `${id}.json`), null);
+          const afterSeq = Number(requestUrl.searchParams.get("afterSeq") || 0);
+          const answer = await readLatestAnswer(dirs, id, afterSeq);
           return sendJson(res, answer);
         }
 
@@ -211,12 +254,15 @@ async function serve(root, options) {
           return sendJson(res, { ok: false, errors: validation.errors }, 400);
         }
 
+        const latest = await readJson(path.join(dirs.answers, `${id}.json`), null);
         const answer = {
           id,
+          seq: Number(latest?.seq || 0) + 1,
           values: validation.values,
           submittedAt: new Date().toISOString(),
         };
         await writeJson(path.join(dirs.answers, `${id}.json`), answer);
+        await appendJsonLine(path.join(dirs.answers, `${id}.jsonl`), answer);
         return sendJson(res, { ok: true, answer });
       }
 
@@ -308,6 +354,7 @@ function normalizeInteraction(schema, args) {
     submitLabel: String(schema.submitLabel || "Submit"),
     fields,
     createdAt: schema.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 }
 
@@ -390,10 +437,10 @@ function validateAnswer(interaction, rawValues) {
   return { values, errors };
 }
 
-async function waitForAnswer(state, id, timeoutSeconds) {
+async function waitForAnswer(state, id, timeoutSeconds, afterSeq = 0) {
   const deadline = Date.now() + timeoutSeconds * 1000;
   while (Date.now() < deadline) {
-    const answer = await getJson(`${state.url}/api/interactions/${encodeURIComponent(id)}/answer`);
+    const answer = await getJson(`${state.url}/api/interactions/${encodeURIComponent(id)}/answer?afterSeq=${encodeURIComponent(afterSeq)}`);
     if (answer) return answer;
     await sleep(500);
   }
@@ -470,9 +517,21 @@ async function readJson(file, fallback) {
   }
 }
 
+async function readLatestAnswer(dirs, id, afterSeq = 0) {
+  const answer = await readJson(path.join(dirs.answers, `${id}.json`), null);
+  if (!answer) return null;
+  if (Number(answer.seq || 0) <= Number(afterSeq || 0)) return null;
+  return answer;
+}
+
 async function writeJson(file, value) {
   await fsp.mkdir(path.dirname(file), { recursive: true });
   await fsp.writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function appendJsonLine(file, value) {
+  await fsp.mkdir(path.dirname(file), { recursive: true });
+  await fsp.appendFile(file, `${JSON.stringify(value)}\n`, "utf8");
 }
 
 async function rmIfExists(file) {
@@ -710,16 +769,37 @@ function renderPage(interaction) {
 <body>
   <main id="app"></main>
   <script>
-    const interaction = ${boot};
+    let interaction = ${boot};
     const app = document.querySelector("#app");
+    let renderedKey = "";
 
     if (!interaction) {
       app.innerHTML = '<div class="empty">아직 열린 질문이 없습니다.</div>';
     } else {
       render(interaction);
     }
+    setInterval(refreshInteraction, 1000);
+
+    async function refreshInteraction() {
+      const id = interaction && interaction.id ? interaction.id : location.pathname.split("/").pop();
+      if (!id) return;
+      try {
+        const response = await fetch("/api/interactions/" + encodeURIComponent(id), { cache: "no-store" });
+        if (!response.ok) return;
+        const next = await response.json();
+        if (!next) return;
+        const nextKey = next.id + ":" + (next.updatedAt || next.createdAt || "");
+        if (nextKey !== renderedKey) {
+          interaction = next;
+          render(next);
+        }
+      } catch {
+        // Keep the current screen while the server is unavailable.
+      }
+    }
 
     function render(data) {
+      renderedKey = data.id + ":" + (data.updatedAt || data.createdAt || "");
       app.innerHTML = "";
       const header = document.createElement("header");
       const title = document.createElement("h1");
@@ -955,7 +1035,8 @@ function printHelp() {
   node interact-server.js ensure [--port 5199]
   node interact-server.js ask --schema schema.json [--wait] [--timeout 600]
   node interact-server.js ask --schema-json '{"title":"...","fields":[...]}' [--wait]
-  node interact-server.js wait --id <interaction-id> [--timeout 600]
+  node interact-server.js update --id <interaction-id> --schema schema.json
+  node interact-server.js wait --id <interaction-id> [--after-seq 1] [--timeout 600]
   node interact-server.js status
   node interact-server.js stop
 
