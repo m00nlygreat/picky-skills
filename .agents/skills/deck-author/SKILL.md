@@ -171,6 +171,7 @@ When asked to polish, proofread, or refine a deck:
 
 - Any Markdown file passed directly to `md2ppt` must start with YAML frontmatter containing `title`; otherwise the generated PPTX may have an empty or broken title slide.
 - Add `materials` to the root YAML frontmatter as a YAML list. Keep it to a short list of hands-on materials learners will directly use during the lesson, such as starter files, sample datasets, worksheets, templates, prompt packs, screenshots, or exercise source files.
+- Exclude deck-authoring artifacts and presentation-only assets from `materials`, including child Markdown modules, slide images, diagrams, generated visual assets, reference screenshots shown only by the instructor, and files used only to compose or render the PPTX.
 - Exclude environment prerequisites from `materials`, including account creation, permissions, API keys, software installation, package installation, device/browser requirements, network access, and login status. If the lesson has no direct hands-on materials, use `materials: []`.
 - Before inserting standalone child Markdown embeds such as `![](modules/01-intro.md)` into the root deck, present the intended embed paths and order to the user and wait for confirmation.
 - Use standalone `![](child.md)` lines for embeds. `flatten.py` only expands Markdown embeds that occupy the full line.
