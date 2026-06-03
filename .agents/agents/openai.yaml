@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Reviewer"
+  short_description: "Review and fix md2ppt decks against $deck-author validation rules."
+  default_prompt: "Use deck-reviewer with gpt-5.4 to validate and fix this $deck-author Markdown deck before final delivery."
