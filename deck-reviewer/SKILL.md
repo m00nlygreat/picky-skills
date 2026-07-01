@@ -13,12 +13,13 @@ If the task requires creating a new deck, changing md2ppt syntax deeply, compili
 
 ## Workflow
 
-1. Identify the deck root and embedded Markdown modules.
-2. Read enough neighboring slides to understand the deck's tone, audience, and repeated patterns.
-3. Build a short issue list grouped by slide or module. Focus on issues that can be fixed immediately.
-4. Edit the Markdown directly, keeping the deck's existing structure unless a structural fix is clearly needed.
-5. Re-read the edited slides and confirm that the target issues are resolved.
-6. Report only the meaningful changes and any remaining risks.
+1. Identify the deck root, its frontmatter, and embedded Markdown modules.
+2. Check frontmatter metadata, especially any `materials` entries, before reviewing slide bodies.
+3. Read enough neighboring slides to understand the deck's tone, audience, and repeated patterns.
+4. Build a short issue list grouped by slide or module. Focus on issues that can be fixed immediately.
+5. Edit the Markdown directly, keeping the deck's existing structure unless a structural fix is clearly needed.
+6. Re-read the edited slides and confirm that the target issues are resolved.
+7. Report only the meaningful changes and any remaining risks.
 
 When reviewing embedded md2ppt decks, follow standalone Markdown embeds such as `![](modules/01-intro.md)`. Review the root deck for section flow, but make most quality edits in the module files where slide bodies live.
 
@@ -83,12 +84,14 @@ Do not add generic filler or invent much new content. Every added element must s
 Scan consecutive slides for repeated structures:
 
 - `title + 3 bullets` repeated across many slides.
+- Lists repeatedly forced into the same item count, such as every slide having exactly 3, 4, or 5 bullets without a content reason.
 - Same wording pattern in titles.
 - Same image reused without a teaching purpose.
 - Repeated table structure where a different format would clarify the point.
 
 Use the smallest useful variation:
 
+- Check whether the current number of list items is genuinely needed. Remove, combine, split, or expand items based on the idea structure rather than maintaining a visually even count.
 - Change one slide into a comparison table.
 - Change one slide into a numbered workflow.
 - Change one slide into an example-driven slide.
@@ -107,6 +110,8 @@ Avoid quality fixes that create converter problems.
 - Do not add `---` between consecutive slide headings.
 - Prefer `##` for normal module slides.
 - Keep tables small enough to fit one slide placeholder.
+- If the deck frontmatter has `materials`, verify that referenced materials exist or are reachable, and check whether relevant existing materials should be used for screenshots, examples, source alignment, or missing visual assets.
+- If expected course materials are absent from frontmatter, flag that as a remaining risk rather than inventing references.
 
 When unsure about md2ppt syntax details, read `$deck-author` or its `references/md2ppt-format.md`.
 

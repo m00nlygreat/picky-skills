@@ -22,8 +22,9 @@ This skill defines authoring rules only. Use `$deck-reviewer` when an existing d
 7. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
 8. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, first try to find a relevant source or reference image through internet search when that would produce a more accurate or recognizable visual; otherwise use `$imagegen`. Move the final project-bound `.png` into `attachments/` before referencing it.
    - For newly generated slide visuals, use `$imagegen` with the default `gpt-image-2` image-generation path and request a bitmap/raster result such as realistic, 3D-rendered, photographic, painterly, or other generated-image styles. Do not substitute SVGs, hand-authored vector drawings, or flat vector-style placeholder art when the slide calls for an image. Use vector/flat SVG style only when the user explicitly asks for it, such as "draw a diagram", "make an SVG", "use vector style", or a similar direct request.
-   - When prompting generated slide visuals, ask for all important subjects and objects to sit fully inside the image frame with generous padding; avoid cropped heads, hands, devices, documents, UI panels, or other key elements touching the image edge. Prefer a transparent or easily removable plain background so the asset sits naturally on the slide.
+   - When prompting generated slide visuals, require all important subjects and objects to sit fully inside the image frame with clear safe margins on all four sides. Explicitly ask for generous top, bottom, left, and right padding, with no cropped heads, hands, devices, documents, UI panels, labels, props, or other key elements touching or nearly touching the image edge. Prefer a transparent or easily removable plain background so the asset sits naturally on the slide.
    - Do not reuse the same image across multiple slides in one deck merely to fill space. Each repeated image must have a distinct instructional role, such as a progressive annotation, before/after contrast, or recap. If a slide feels visually empty, create or find a slide-specific visual instead of repeating a generic asset.
+   - Do not rely on programmatic drawing libraries such as `System.Drawing`, canvas scripts, or hand-authored shape code to create slide images when the task calls for image generation. Use these only in narrow cases where deterministic markup, annotation overlays, contact sheets, cropping, resizing, alpha cleanup, or other mechanical post-processing is specifically needed.
 9. Before running `md2ppt`, choose and state the working directory explicitly. Default to the directory that contains the Markdown file passed to `-i`; do not run from the repository root merely because that is the current shell directory.
 
 ## File Structure
@@ -110,11 +111,25 @@ When planning or creating visuals, explicitly classify requested slide images us
 5. Metaphor image: a visual analogy for the deck's message, such as scattered inputs becoming an organized structure or multiple streams converging into one output. Prefer little or no text.
 6. Markup image: annotations on a provided screenshot or image, using boxes, arrows, numbers, highlights, and short labels to point out key UI areas, issues, or comparison points. If no source screenshot or image is available, ask the user to provide one before making the markup image.
 
-All final deck-referenced images must be transparent PNG files. Source screenshots or references may arrive in other formats, but the asset saved under `attachments/` should be a `.png` with an alpha channel; preserve opaque screenshot/photo content when needed and keep any canvas, padding, or non-image background transparent. For generated assets, keep the full subject comfortably inside the canvas and avoid edge cropping so the image can be scaled or placed on a slide without awkward cuts.
+## Slide Image Patterns
+
+Before creating a generated slide image, choose one of these common visual patterns and make that choice explicit in the prompt. If the user asks for a different style, follow the user's style instead.
+
+1. Screenshot-like example: a realistic but illustrative product or app screen mockup that shows concrete UI states, sample records, filters, buttons, cards, calendars, form fields, or result screens. Use this when the slide teaches how something looks on screen, demonstrates hands-on tool operation, or needs learners to recognize a workflow. Keep it clearly illustrative, avoid official logos or exact product screenshots unless a real screenshot is provided, and use short, legible labels.
+2. Abstract concept visual: a simplified conceptual image that shows relationships, separation, flow, duplication, grouping, hierarchy, transformation, or cause-and-effect without detailed UI. Use this when the slide teaches why a structure matters, explains a mental model, or would become cluttered with interface details. Prefer few labels, strong spatial metaphors, and clean objects such as clusters, streams, containers, cards, and connector lines.
+3. Before / After comparison: a side-by-side or left-to-right transformation image that makes a change visible. Use this when the slide compares messy vs organized states, manual vs automated work, unfiltered vs filtered data, draft vs final output, or problem vs solution. Label the states clearly with short text such as `AS-IS`, `TO-BE`, `Before`, `After`, `정리 전`, or `정리 후`; keep both sides visually comparable.
+4. Process flow: a 3-5 step sequence that shows actions, phases, or data movement with directional arrows. Use this when the slide teaches a repeatable procedure, workflow, pipeline, checklist, or decision path. Keep each step label short, make the direction unambiguous, and avoid adding decorative branches that do not affect the action.
+5. Annotated zoom / markup: a screenshot, UI mockup, or document detail with callouts, boxes, highlights, zoom bubbles, arrows, or numbered labels. Use this when the slide needs to point out where to click, which area matters, what changed, or what error to notice. Use real screenshots when available; if generating a mockup, keep it clearly illustrative and focus annotations on 1-4 key areas.
+
+Nudge toward screenshot-like examples and annotated zoom / markup for hands-on tool operation slides; nudge toward abstract concept visuals for principle, architecture, data modeling, and transition slides; nudge toward before / after comparison for change, cleanup, or improvement claims; nudge toward process flow for procedures and repeatable workflows. When uncertain, prefer the pattern that best supports the slide intent rather than filling space with decorative imagery.
+
+All final deck-referenced images must be transparent PNG files. Source screenshots or references may arrive in other formats, but the asset saved under `attachments/` should be a `.png` with an alpha channel; preserve opaque screenshot/photo content when needed and keep any canvas, padding, or non-image background transparent. For generated raster assets, keep the full subject comfortably inside the canvas with visible safe margins on all four sides, preferably about 10-15% of the image width/height when composition allows. Reject or regenerate images where the main subject, text, device, document, character, hand, prop, or UI panel is cropped, cut off, flush against the edge, or too close to the edge to scale cleanly on a slide.
 
 When a slide needs a concrete object, product, place, person, UI, case, or other reality-based visual, try internet image search before generating a new image. Prefer authoritative, relevant, inspectable sources over generic stock-like images. Use `$imagegen` when search does not provide a suitable source, when the slide needs a conceptual or synthetic visual, or when licensing/source constraints make direct reuse inappropriate. Save only the final deck-ready asset under `attachments/` and keep any source attribution or usage caveat in speaker notes when needed.
 
 When using `$imagegen` for slide imagery, explicitly prompt for a generated bitmap/raster image and avoid vector-style language unless the user specifically asks for vector art, flat SVG, or a diagram-style drawing. Prefer wording such as "3D rendered scene", "photographic slide visual", "textured bitmap illustration", or "generated raster infographic" over "SVG", "flat vector", or "vector icon set". If the user's request says "image generation", do not satisfy it by drawing native SVG shapes; reserve vector/flat SVG style for explicit requests such as "draw a diagram".
+
+Do not use `System.Drawing`, HTML canvas, matplotlib, Mermaid exports, or similar code-drawn graphics as a substitute for requested generated slide imagery. They are acceptable only for limited mechanical markup and finishing tasks, such as adding callout boxes to a real screenshot, assembling a contact sheet, cropping, resizing, or converting an already chosen visual into a deck-ready transparent PNG.
 
 Within a single deck, avoid using the same image file on more than one slide unless the repetition is intentional and pedagogically useful. Acceptable repetitions include stepwise markup of the same screenshot, a before/after pair, or a final recap that explicitly refers back to an earlier visual. Unacceptable repetitions include using the same decorative workflow, icon set, or generic illustration to make unrelated slides look less empty.
 
@@ -159,19 +174,21 @@ For Korean slide decks:
 
 ### Titles And Headings
 
-Prefer slide titles that state the slide's point, not just its topic.
+Use slide titles to keep each slide centered on one clear subject or role.
+Choose topic-style, phrase-style, or message-style titles according to the deck's existing heading style and instructional context.
+A stronger title is one that narrows the slide's scope and makes the content boundary clear.
 
 Weak:
 
-- Market Overview
-- 주요 기능
-- 문제점
+- Overview
+- 기능
+- 문제
 
 Better:
 
-- The Market Is Fragmented Across Three Buyer Groups
-- 반복 작업을 줄이는 3가지 핵심 기능
-- 현재 프로세스는 검토 단계에서 병목 발생
+- Market Segments
+- 반복 작업 자동화 기능
+- 검토 단계 병목
 
 ### Editing Scope
 
