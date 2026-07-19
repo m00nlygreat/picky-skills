@@ -15,17 +15,20 @@ This skill defines authoring rules only. Use `$deck-reviewer` when an existing d
 
 1. Identify the deck root, target audience, duration, and source material.
 2. Before writing slide content, perform Slide Intent & Composition Planning for each slide or section.
-3. Create a root Markdown file with deck-level YAML frontmatter that includes `title` and `materials`. If authoring a lesson `text.md` directly, add YAML frontmatter with `title` and `materials` there too.
-4. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
-5. Before adding embedded child Markdown references to the root deck, show the proposed embed list and get user confirmation.
-6. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `***` splits placeholders inside the current slide, and `---` or `___` forces a new slide only when there is no new slide heading. Do not place `---` between consecutive slide headings.
-7. Keep child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter.
-8. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, first try to find a relevant source or reference image through internet search when that would produce a more accurate or recognizable visual; otherwise use `$imagegen`. Move the final project-bound `.png` into `attachments/` before referencing it.
+3. Choose the requested authoring mode: **초안 (Draft)** or **전개 (Development)**. 초안 is optional; a general request to write or build a deck may proceed directly to 전개.
+4. When the user explicitly requests 초안, start every draft Markdown file with YAML frontmatter containing `title` and `materials`, then create only consecutive level-2 headings and one single-line list item under each heading. Use the heading as the slide title and the list item as a brief summary of the slide's claim and content. Do not add developed slide content in the same response or artifact unless the user also requests it.
+5. When the user requests 전개 or a presentation-ready deck, write the necessary slide copy, examples, evidence, visuals, tables, code, activities, and speaker notes. If an approved 초안 exists, preserve its claims and sequence unless a change is surfaced to the user; otherwise develop the deck directly from the intent and composition plan.
+6. Create a root Markdown file with deck-level YAML frontmatter that includes `title` and `materials`. If authoring a lesson `text.md` directly, add YAML frontmatter with `title` and `materials` there too.
+7. Put lesson content in child Markdown modules under a stable folder such as `modules/`; put generated or collected visual assets under `attachments/`.
+8. Before adding embedded child Markdown references to the root deck, show the proposed embed list and get user confirmation.
+9. Use md2ppt grammar deliberately: `#` or `##` starts a slide, `***` splits placeholders inside the current slide, and `---` or `___` forces a new slide only when there is no new slide heading. Do not place `---` between consecutive slide headings.
+10. Keep developed child modules free of YAML frontmatter unless there is a specific reason; `flatten.py` ignores child frontmatter. Treat a user-requested 초안 as a specific reason: every draft module must include `title` and `materials` frontmatter so it remains a self-describing review artifact.
+11. Save slide image assets as transparent PNG project files and reference them with relative Markdown image paths. If a new raster visual is needed for a slide, first try to find a relevant source or reference image through internet search when that would produce a more accurate or recognizable visual; otherwise use `$imagegen`. Move the final project-bound `.png` into `attachments/` before referencing it.
    - For newly generated slide visuals, use `$imagegen` with the default `gpt-image-2` image-generation path and request a bitmap/raster result such as realistic, 3D-rendered, photographic, painterly, or other generated-image styles. Do not substitute SVGs, hand-authored vector drawings, or flat vector-style placeholder art when the slide calls for an image. Use vector/flat SVG style only when the user explicitly asks for it, such as "draw a diagram", "make an SVG", "use vector style", or a similar direct request.
    - When prompting generated slide visuals, require all important subjects and objects to sit fully inside the image frame with clear safe margins on all four sides. Explicitly ask for generous top, bottom, left, and right padding, with no cropped heads, hands, devices, documents, UI panels, labels, props, or other key elements touching or nearly touching the image edge. Prefer a transparent or easily removable plain background so the asset sits naturally on the slide.
    - Do not reuse the same image across multiple slides in one deck merely to fill space. Each repeated image must have a distinct instructional role, such as a progressive annotation, before/after contrast, or recap. If a slide feels visually empty, create or find a slide-specific visual instead of repeating a generic asset.
    - Do not rely on programmatic drawing libraries such as `System.Drawing`, canvas scripts, or hand-authored shape code to create slide images when the task calls for image generation. Use these only in narrow cases where deterministic markup, annotation overlays, contact sheets, cropping, resizing, alpha cleanup, or other mechanical post-processing is specifically needed.
-9. Before running `md2ppt`, choose and state the working directory explicitly. Default to the directory that contains the Markdown file passed to `-i`; do not run from the repository root merely because that is the current shell directory.
+12. Before running `md2ppt`, choose and state the working directory explicitly. Default to the directory that contains the Markdown file passed to `-i`; do not run from the repository root merely because that is the current shell directory.
 
 ## File Structure
 
@@ -99,6 +102,42 @@ For each slide, define:
 Before drafting body content, choose the lightest format that carries the intent: bullets, table, comparison, steps, example, or image.
 
 Only after this planning step should the slide be drafted. A slide is not a place to pour in available information; it is a deliberately designed step in the audience's reasoning.
+
+## Authoring Modes: 초안 and 전개
+
+Treat **초안 (Draft)** as an optional outline mode and **전개 (Development)** as the presentation-ready writing mode. Do not require a 초안 before 전개. Select the mode from the user's wording; when the user explicitly says 초안, return only a 초안.
+
+### 1. 초안 (Draft)
+
+Define 초안 as a slide-level outline, not abbreviated full content. For every planned slide:
+
+- Start the draft Markdown file with YAML frontmatter containing `title` and `materials`; use `materials: []` when no learner-facing materials are known yet.
+- Write the page title as a level-2 heading (`##`).
+- Write exactly one single-line list item immediately below it.
+- Summarize the slide's central claim and intended content in that one line.
+- List consecutive slides directly without `---`, `***`, body paragraphs, nested lists, tables, code blocks, images, layout directives, or speaker notes.
+- Do not add developed slide body content to a 초안 unless the user explicitly requests both modes together.
+
+Use this exact pattern:
+
+```markdown
+---
+title: 파일과 폴더
+materials: []
+---
+
+## 파일과 폴더는 역할이 다르다
+
+- 파일은 내용을 저장하고 폴더는 파일과 하위 폴더를 분류한다는 차이를 설명
+
+## 확장자는 파일의 종류를 알려준다
+
+- 파일명 끝의 `.jpg`, `.pdf`, `.zip`을 통해 형식과 용도를 구분하는 방법 소개
+```
+
+### 2. 전개 (Development)
+
+Proceed directly to 전개 when the user asks to write, build, complete, or make a presentation-ready deck without specifically requesting 초안. Select the lightest effective composition for each claim. Add only the body copy, examples, evidence, visuals, tables, code, activities, and speaker notes needed to teach the slide's intended message. When an approved 초안 exists, preserve its slide order and claims unless a change is surfaced to the user.
 
 ## Slide Image Types
 
@@ -220,7 +259,7 @@ When asked to polish, proofread, or refine a deck:
 - Use `[layout]: # (layout_name)` only when intentionally forcing a layout that exists in the target template and cannot be inferred automatically. Do not add internal/default layout names such as `section_header`, `title_and_content`, or `two_content` unless the target template actually contains that layout name.
 - Use `[note]: # (speaker note text)` on its own line for slide notes.
 - Prefer `##` for normal content slides inside modules. Use `#` when a section divider or table-of-contents chapter is intentional.
-- When sketching or drafting slide headings, list consecutive `##` headings directly. Do not add `---` between them; the heading already starts the next slide. For heading-only outlines or early structure drafts, omit slide separators entirely unless the user explicitly asks for md2ppt-ready slide breaks.
+- When the user requests 초안, use the exact format defined in **Authoring Modes: 초안 and 전개**: YAML frontmatter with `title` and `materials`, followed by consecutive `##` slide titles with exactly one single-line list item under each title. After the frontmatter, do not add `---` between slides; the heading already starts the next slide. Do not include expanded slide elements unless the user explicitly requests both 초안 and 전개 together.
 - Use `---` or `___` only to force a new slide without a slide heading, or to separate two slides where the next slide intentionally starts with non-heading content.
 - Keep each slide to one main message. If a slide intentionally needs separate text and media regions that md2ppt cannot infer safely from monopoly elements, split those areas with `***`.
 - Use pipe tables only for small tables that can fit in one slide placeholder by themselves.

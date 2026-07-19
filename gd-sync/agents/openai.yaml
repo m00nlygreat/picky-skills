@@ -1,4 +1,4 @@
 interface:
   display_name: "Google Drive Sync"
-  short_description: "Push local folders safely to Google Drive"
-  default_prompt: "Use $gd-sync to push this local folder to its configured Google Drive folder."
+  short_description: "Push or pull folders safely with Google Drive"
+  default_prompt: "Use $gd-sync to inspect and synchronize this folder with its configured Google Drive folder."
