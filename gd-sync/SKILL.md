@@ -58,6 +58,9 @@ drive_folder_id: "Google Drive folder ID"
 last_sync_at: null
 ignore:
   - "gd-sync.yml"
+  - ".agents/"
+  - ".codex/"
+  - ".claude/"
   - ".git/"
   - "*.tmp"
 ```
@@ -65,7 +68,7 @@ ignore:
 - Interpret ignore entries as path globs relative to the local root.
 - Apply ignore entries in both push and pull directions.
 - Treat a trailing `/` as a directory and all of its descendants.
-- Always ignore `gd-sync.yml`, even if a user removes it from the list.
+- Always ignore `gd-sync.yml` and the agent configuration directories `.agents/`, `.codex/`, and `.claude/`, even if a user removes them from the list.
 - Update `last_sync_at` only after a successful non-dry-run push.
 - Update `last_sync_at` only after a successful non-dry-run push or pull.
 - Refuse local symbolic links instead of silently following them.

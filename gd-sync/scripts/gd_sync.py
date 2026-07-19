@@ -16,7 +16,7 @@ import tempfile
 from datetime import datetime, timezone
 
 CONFIG_NAME = "gd-sync.yml"
-DEFAULT_IGNORES = [CONFIG_NAME]
+DEFAULT_IGNORES = [CONFIG_NAME, ".agents/", ".codex/", ".claude/"]
 FOLDER_MIME = "application/vnd.google-apps.folder"
 GOOGLE_EXPORTS = {
     "application/vnd.google-apps.document": ("docx", ".docx"),
