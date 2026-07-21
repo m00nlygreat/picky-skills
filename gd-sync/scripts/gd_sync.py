@@ -253,6 +253,44 @@ def setup_guidance(message: str) -> None:
     print("  gog auth list --check", file=sys.stderr)
 
 
+def gog_failure_guidance(output: str) -> None:
+    normalized = output.casefold()
+    keyring_access_markers = (
+        "keyring/.lock",
+        "open keyring lock",
+        "read-only file system",
+        "permission denied",
+    )
+    if "keyring" in normalized and any(marker in normalized for marker in keyring_access_markers):
+        print(
+            "gog could not access its existing keyring in this execution environment. "
+            "This does not mean the account is missing.",
+            file=sys.stderr,
+        )
+        print(
+            "Retry the same command with permission to access the user's gog keyring, "
+            "then run `gog auth list --check`.",
+            file=sys.stderr,
+        )
+        return
+    if "missing --account" in normalized:
+        print(
+            "gog could not select an account in this execution environment. "
+            "This may happen when a sandbox cannot see the existing keyring; it is not proof that no account is configured.",
+            file=sys.stderr,
+        )
+        print(
+            "Run `gog auth list --check` with permission to access the user's gog keyring, then retry.",
+            file=sys.stderr,
+        )
+        return
+    auth_markers = ("credential", "token", "unauthorized", "not authenticated")
+    if any(marker in normalized for marker in auth_markers):
+        print("gog authentication needs attention. Check it with:", file=sys.stderr)
+        print("  gog auth list --check", file=sys.stderr)
+        print("Only reconfigure credentials if that check confirms they are missing or invalid.", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".", help="local directory containing gd-sync.yml")
@@ -271,8 +309,14 @@ def main() -> int:
     if subprocess.run([gog, "--version"], check=False).returncode != 0:
         setup_guidance("gog CLI exists but could not run.")
         return 3
-    if subprocess.run([gog, "auth", "status"], check=False).returncode != 0:
-        setup_guidance("gog authentication configuration is unavailable.")
+    auth_status = subprocess.run(
+        [gog, "auth", "status"], check=False, capture_output=True, text=True, encoding="utf-8"
+    )
+    if auth_status.returncode != 0:
+        auth_output = "\n".join(part for part in (auth_status.stdout, auth_status.stderr) if part).strip()
+        if auth_output:
+            print(auth_output, file=sys.stderr)
+        gog_failure_guidance(auth_output)
         return 4
 
     config_path = root / CONFIG_NAME
@@ -328,13 +372,16 @@ def main() -> int:
         command = [gog, "drive", "sync", "push", str(staging), "--parent", folder_id]
         if args.dry_run:
             command.append("--dry-run")
-        completed = subprocess.run(command, check=False)
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8")
+
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    if completed.stderr:
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
 
     if completed.returncode != 0:
-        print("gog push failed. If the error mentions credentials, tokens, or keyring, run:", file=sys.stderr)
-        print("  gog auth credentials set <oauth-client.json>", file=sys.stderr)
-        print("  gog auth add <email>", file=sys.stderr)
-        print("  gog auth list --check", file=sys.stderr)
+        print("gog push failed.", file=sys.stderr)
+        gog_failure_guidance("\n".join((completed.stdout, completed.stderr)))
         return completed.returncode
     if args.dry_run:
         print("Dry run completed; last_sync_at was not changed.")
