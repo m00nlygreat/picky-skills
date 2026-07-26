@@ -20,6 +20,28 @@ const TEXT_EXTENSIONS = new Set([
   ".py", ".sh", ".sql", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
 ]);
 
+const MONACO_ROOT = fileURLToPath(new URL("../node_modules/monaco-editor/min/vs/", import.meta.url));
+const MONACO_LANGUAGES = new Map([
+  [".css", "css"], [".csv", "plaintext"], [".html", "html"], [".ini", "ini"],
+  [".js", "javascript"], [".json", "json"], [".jsx", "javascript"], [".log", "plaintext"],
+  [".markdown", "markdown"], [".md", "markdown"], [".mjs", "javascript"], [".py", "python"],
+  [".sh", "shell"], [".sql", "sql"], [".toml", "ini"], [".ts", "typescript"],
+  [".tsx", "typescript"], [".txt", "plaintext"], [".xml", "xml"], [".yaml", "yaml"], [".yml", "yaml"],
+]);
+
+const MONACO_WORKER_PATH = "/vendor/monaco/vs/assets/canvas-worker.js";
+const MONACO_WORKER_PREFIXES = new Map([
+  ["css", "css.worker-"],
+  ["handlebars", "html.worker-"],
+  ["html", "html.worker-"],
+  ["javascript", "ts.worker-"],
+  ["json", "json.worker-"],
+  ["less", "css.worker-"],
+  ["razor", "html.worker-"],
+  ["scss", "css.worker-"],
+  ["typescript", "ts.worker-"],
+]);
+
 const MIME_TYPES = new Map([
   [".avif", "image/avif"],
   [".css", "text/css; charset=utf-8"],
@@ -40,6 +62,7 @@ const MIME_TYPES = new Map([
   [".pdf", "application/pdf"],
   [".png", "image/png"],
   [".svg", "image/svg+xml"],
+  [".ttf", "font/ttf"],
   [".txt", "text/plain; charset=utf-8"],
   [".wav", "audio/wav"],
   [".webm", "video/webm"],
@@ -230,6 +253,17 @@ async function handleRequest(req, res, root, getState) {
     return;
   }
 
+  // Served from the assets directory so nested worker imports resolve against the right base URL.
+  if (req.method === "GET" && requestUrl.pathname === MONACO_WORKER_PATH) {
+    sendText(res, await monacoWorkerBootstrap(requestUrl.searchParams.get("label")), "text/javascript; charset=utf-8");
+    return;
+  }
+
+  if (req.method === "GET" && requestUrl.pathname.startsWith("/vendor/monaco/vs/")) {
+    await sendVendorFile(res, requestUrl.pathname.slice("/vendor/monaco/vs/".length));
+    return;
+  }
+
   if (req.method === "GET" && requestUrl.pathname === "/asset") {
     const file = await resolveExistingFile(root, requestUrl.searchParams.get("path"));
     await sendAsset(req, res, file, requestUrl.searchParams.has("download"));
@@ -253,6 +287,7 @@ async function handleRequest(req, res, root, getState) {
       body: rendered.body,
       targetPath: file.relativePath,
       kind: rendered.kind,
+      language: hasSourceView(rendered) ? sourceLanguage(file) : "",
     }));
     return;
   }
@@ -381,6 +416,58 @@ async function streamEvents(req, res, root, requestedPath) {
   res.on("close", close);
 }
 
+// Serves the bundled Monaco editor so the source view works without network access.
+async function sendVendorFile(res, requestedPath) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(requestedPath);
+  } catch {
+    throw new HttpError(400, "Invalid vendor path");
+  }
+  if (decoded.includes("\0") || path.isAbsolute(decoded)) throw new HttpError(403, "Invalid vendor path");
+
+  const candidate = path.resolve(MONACO_ROOT, decoded);
+  if (!isWithin(MONACO_ROOT, candidate)) throw new HttpError(403, "Path escapes the vendor root");
+
+  let stat;
+  try {
+    stat = await fsp.stat(candidate);
+  } catch {
+    throw new HttpError(404, "Monaco assets are not installed");
+  }
+  if (!stat.isFile()) throw new HttpError(404, "Not found");
+
+  res.writeHead(200, securityHeaders({
+    "content-type": MIME_TYPES.get(path.extname(candidate).toLowerCase()) || "application/octet-stream",
+    "content-length": stat.size,
+    "cache-control": "no-cache",
+  }));
+  await new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(candidate);
+    stream.on("error", reject);
+    stream.on("end", resolve);
+    stream.pipe(res);
+  });
+}
+
+// Monaco ships hashed worker bundles, so the matching asset is resolved at request time.
+async function monacoWorkerBootstrap(label) {
+  const prefix = MONACO_WORKER_PREFIXES.get(String(label || "")) || "editor.worker-";
+  const asset = await findMonacoAsset(prefix);
+  if (!asset) throw new HttpError(404, "Monaco worker assets are not installed");
+  return `import "./${asset}";\n`;
+}
+
+async function findMonacoAsset(prefix) {
+  let entries;
+  try {
+    entries = await fsp.readdir(path.join(MONACO_ROOT, "assets"));
+  } catch {
+    return null;
+  }
+  return entries.find((entry) => entry.startsWith(prefix) && entry.endsWith(".js")) || null;
+}
+
 async function sendAsset(req, res, file, download) {
   const range = parseRange(req.headers.range, file.stat.size);
   const status = range ? 206 : 200;
@@ -479,6 +566,15 @@ function isWithin(root, candidate) {
   return relative === "" || (!relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative));
 }
 
+// The source view only applies to files whose bytes are readable as text.
+function hasSourceView(rendered) {
+  return rendered.kind === "markdown" || rendered.kind === "text";
+}
+
+function sourceLanguage(file) {
+  return MONACO_LANGUAGES.get(file.extension) || "plaintext";
+}
+
 function isTextFile(file) {
   return file.mime.startsWith("text/") ||
     file.mime.includes("json") ||
@@ -486,9 +582,9 @@ function isTextFile(file) {
     TEXT_EXTENSIONS.has(file.extension);
 }
 
-function renderShell({ title, body, targetPath = "", kind = "landing" }) {
+function renderShell({ title, body, targetPath = "", kind = "landing", language = "" }) {
   const safeTitle = escapeHtml(title);
-  const bootPath = safeJson(targetPath);
+  const boot = safeJson({ path: targetPath, language });
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -502,7 +598,15 @@ function renderShell({ title, body, targetPath = "", kind = "landing" }) {
     .topbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 8px 18px; border-bottom: 1px solid #dedbd4; background: color-mix(in srgb, #f6f5f2 92%, transparent); backdrop-filter: blur(12px); }
     .brand { font-weight: 750; letter-spacing: -.02em; }
     .path { overflow: hidden; color: #68645d; font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+    .view-toggle { margin-left: auto; flex: none; border: 1px solid #d5d1c9; border-radius: 7px; background: #fff; color: #20201f; padding: 5px 11px; font: inherit; font-size: 12.5px; cursor: pointer; }
+    .view-toggle:hover { border-color: #b6b1a7; }
     main { width: min(900px, calc(100% - 36px)); margin: 0 auto; padding: 44px 0 80px; }
+    .source { display: none; }
+    body[data-view="source"] main { width: 100%; padding: 0; }
+    body[data-view="source"] .rendered { display: none; }
+    body[data-view="source"] .source { display: block; }
+    .editor { height: calc(100vh - 45px); }
+    .source pre { height: calc(100vh - 45px); margin: 0; border: 0; border-radius: 0; }
     .markdown { font-size: 17px; line-height: 1.72; }
     .markdown h1, .markdown h2, .markdown h3 { margin: 1.7em 0 .65em; line-height: 1.22; letter-spacing: -.025em; }
     .markdown h1:first-child { margin-top: 0; }
@@ -530,18 +634,123 @@ function renderShell({ title, body, targetPath = "", kind = "landing" }) {
       .notice { background: #20201e; }
       .markdown a { color: #75b9ed; }
       .download { background: #e8e6e1; color: #181817; }
+      .view-toggle { border-color: #3b3935; background: #242321; color: #e8e6e1; }
+      .view-toggle:hover { border-color: #575450; }
     }
     @media (max-width: 600px) { main { width: min(100% - 28px, 900px); padding-top: 28px; } .markdown { font-size: 16px; } }
   </style>
 </head>
-<body data-kind="${escapeHtml(kind)}">
-  <header class="topbar"><span class="brand">Canvas</span>${targetPath ? `<span class="path">${escapeHtml(targetPath)}</span>` : ""}</header>
-  <main class="${kind === "markdown" ? "markdown" : kind}">${body}</main>
+<body data-kind="${escapeHtml(kind)}" data-view="rendered">
+  <header class="topbar">
+    <span class="brand">Canvas</span>${targetPath ? `<span class="path">${escapeHtml(targetPath)}</span>` : ""}
+    ${language ? '<button type="button" id="view-toggle" class="view-toggle" title="Toggle rendered preview and source (Ctrl+U)">Source</button>' : ""}
+  </header>
+  <main>
+    <div class="rendered ${kind === "markdown" ? "markdown" : kind}">${body}</div>
+    ${language ? '<div class="source"><div class="editor" id="editor"></div></div>' : ""}
+  </main>
   <script>
-    const targetPath = ${bootPath};
-    if (targetPath) {
-      const events = new EventSource("/events?path=" + encodeURIComponent(targetPath));
+    const boot = ${boot};
+
+    if (boot.path) {
+      const events = new EventSource("/events?path=" + encodeURIComponent(boot.path));
       events.addEventListener("change", () => location.reload());
+    }
+
+    const toggle = document.getElementById("view-toggle");
+    if (toggle) {
+      const VIEW_KEY = "canvas:view";
+      const host = document.getElementById("editor");
+      let monacoPromise = null;
+      let ready = false;
+
+      const loadMonaco = () => {
+        if (monacoPromise) return monacoPromise;
+        monacoPromise = new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = "/vendor/monaco/vs/loader.js";
+          script.onerror = () => reject(new Error("Monaco assets are not available"));
+          script.onload = () => {
+            // getWorker keeps the classic worker bootstrap below; getWorkerUrl would force a module worker.
+            window.MonacoEnvironment = {
+              getWorker: (id, label) => new Worker(
+                "/vendor/monaco/vs/assets/canvas-worker.js?label=" + encodeURIComponent(label),
+                { name: label, type: "module" },
+              ),
+            };
+            window.require.config({ paths: { vs: "/vendor/monaco/vs" } });
+            window.require(["vs/editor/editor.main"], () => resolve(window.monaco), reject);
+          };
+          document.head.appendChild(script);
+        });
+        return monacoPromise;
+      };
+
+      const readSource = async () => {
+        const response = await fetch("/asset?path=" + encodeURIComponent(boot.path));
+        if (!response.ok) throw new Error("Could not read the source file");
+        return response.text();
+      };
+
+      // Falls back to plain text when the bundled editor is missing or fails to load.
+      const showPlainSource = (text) => {
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        code.textContent = text;
+        pre.appendChild(code);
+        host.replaceWith(pre);
+      };
+
+      const mountSource = async () => {
+        if (ready) return;
+        ready = true;
+        const text = await readSource();
+        try {
+          const monaco = await loadMonaco();
+          const dark = window.matchMedia("(prefers-color-scheme: dark)");
+          const editor = monaco.editor.create(host, {
+            value: text,
+            language: boot.language,
+            theme: dark.matches ? "vs-dark" : "vs",
+            readOnly: true,
+            domReadOnly: true,
+            automaticLayout: true,
+            wordWrap: "on",
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            renderWhitespace: "selection",
+            fontSize: 13,
+            padding: { top: 12, bottom: 12 },
+          });
+          dark.addEventListener("change", (event) => {
+            monaco.editor.setTheme(event.matches ? "vs-dark" : "vs");
+          });
+          if (document.body.dataset.view === "source") editor.layout();
+        } catch {
+          showPlainSource(text);
+        }
+      };
+
+      const setView = (view) => {
+        document.body.dataset.view = view;
+        toggle.textContent = view === "source" ? "Preview" : "Source";
+        try { localStorage.setItem(VIEW_KEY, view); } catch {}
+        if (view === "source") mountSource().catch(() => {});
+      };
+
+      toggle.addEventListener("click", () => {
+        setView(document.body.dataset.view === "source" ? "rendered" : "source");
+      });
+      document.addEventListener("keydown", (event) => {
+        if ((event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "u") {
+          event.preventDefault();
+          toggle.click();
+        }
+      });
+
+      let stored = "rendered";
+      try { stored = localStorage.getItem(VIEW_KEY) || "rendered"; } catch {}
+      setView(stored === "source" ? "source" : "rendered");
     }
   </script>
 </body>
@@ -554,6 +763,14 @@ function sendHtml(res, html, status = 200) {
     "cache-control": "no-store",
   }));
   res.end(html);
+}
+
+function sendText(res, body, contentType, status = 200) {
+  res.writeHead(status, securityHeaders({
+    "content-type": contentType,
+    "cache-control": "no-cache",
+  }));
+  res.end(body);
 }
 
 function sendJson(res, value, status = 200) {
@@ -580,7 +797,7 @@ function sendError(res, error) {
 function securityHeaders(headers) {
   return {
     ...headers,
-    "content-security-policy": "default-src 'self'; connect-src 'self'; frame-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'",
+    "content-security-policy": "default-src 'self'; connect-src 'self'; font-src 'self' data:; frame-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
   };

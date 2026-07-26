@@ -10,6 +10,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "monaco-editor": "^0.56.0",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1"

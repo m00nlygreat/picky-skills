@@ -62,10 +62,26 @@ test("serves files safely and reloads changed Markdown", async (t) => {
   assert.match(markdown, /\/\?path=%EB%AC%B8%EC%84%9C%2Fnote\.txt/);
   assert.doesNotMatch(markdown, /alert\('unsafe'\)/);
 
+  assert.match(markdown, /id="view-toggle"/);
+  assert.match(markdown, /"language":"markdown"/);
+
   const baseUrl = new URL(started.url).origin;
   const textResponse = await fetch(`${baseUrl}/?path=${encodeURIComponent("문서/note.txt")}`);
   const text = await textResponse.text();
   assert.match(text, /&lt;unsafe&gt; plain text/);
+  assert.match(text, /"language":"plaintext"/);
+
+  const loaderResponse = await fetch(`${baseUrl}/vendor/monaco/vs/loader.js`);
+  assert.equal(loaderResponse.status, 200);
+  assert.match(loaderResponse.headers.get("content-type"), /javascript/);
+  await loaderResponse.text();
+
+  const workerResponse = await fetch(`${baseUrl}/vendor/monaco/vs/assets/canvas-worker.js?label=json`);
+  assert.equal(workerResponse.status, 200);
+  assert.match(await workerResponse.text(), /^import "\.\/json\.worker-[^"]+\.js";/);
+
+  const vendorEscape = await fetch(`${baseUrl}/vendor/monaco/vs/..%2F..%2Fpackage.json`);
+  assert.equal(vendorEscape.status, 403);
 
   const binaryResponse = await fetch(`${baseUrl}/?path=data.bin`);
   assert.match(await binaryResponse.text(), /Download file/);
