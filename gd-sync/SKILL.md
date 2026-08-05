@@ -1,11 +1,19 @@
 ---
 name: gd-sync
-description: Push or pull a local directory against a configured Google Drive folder with gog CLI. Use when the user asks to initialize, inspect, dry-run, upload, download, or synchronize a folder governed by gd-sync.yml, including ignore rules and last-sync tracking.
+description: Push or pull a local directory against a configured Google Drive folder with gog CLI. Use when the user asks to initialize, inspect, dry-run, upload, download, or synchronize a folder governed by gd-sync.yml, including ignore rules, Google-native HTML, pointer, or export handling, and last-sync tracking.
 ---
 
 # Google Drive Sync
 
 Reconcile a local folder with Google Drive in an explicitly selected direction. Push uses `gog drive sync push`; pull recursively lists and downloads Drive items. Never claim either operation is bidirectional. Push never deletes remote-only files, and pull never deletes local-only files.
+
+## Result reporting
+
+- After a successful non-dry-run push or pull, include a brief file list in the result.
+- List only files actually created or updated/overwritten by that operation; do not list skipped or ignored files.
+- Write paths relative to the local root as plain text, without Markdown links, backticks, or other clickable formatting. Include folders only when useful to explain a newly created directory, not in the file list.
+- If more than 30 files changed, list the first 30 paths and state how many additional files changed. If no files changed, state `Files changed: none`.
+- Dry-run output describes planned actions and must not be presented as completed file changes.
 
 ## Push workflow
 
@@ -26,7 +34,8 @@ Reconcile a local folder with Google Drive in an explicitly selected direction. 
    python <skill-dir>/scripts/gd_sync.py --root <local-root>
    ```
 
-8. Report whether the push completed and the new `last_sync_at` value.
+8. Report whether the push completed, the new `last_sync_at` value, and a brief plain-text list of files actually created or updated.
+9. Exclude `.gdrive.html` files only when they contain gd-sync's generator marker, and exclude pointer files only when they contain gd-sync's warning plus a `doc_id`. Do not exclude user-authored ordinary HTML, including manually created `.gdrive.html` files without that marker.
 
 ## Pull workflow
 
@@ -45,9 +54,13 @@ Reconcile a local folder with Google Drive in an explicitly selected direction. 
    python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction pull
    ```
 
-6. Report created, updated, skipped, and ignored counts plus the new `last_sync_at` value.
-7. Treat same-name remote paths, unsafe names, and file/folder type conflicts as errors instead of guessing.
-8. Export Google Docs, Sheets, Slides, and Drawings as DOCX, XLSX, PPTX, and PNG respectively; reject unsupported Google-native types.
+6. Report created, updated, skipped, and ignored counts plus the new `last_sync_at` value and a brief plain-text list of files actually created or updated.
+7. Treat same-name transformed remote paths, unsafe names, and file/folder type conflicts as errors instead of guessing.
+8. Handle Google-native documents according to `google_native`:
+   - `html` (default): create `original-name.gdrive.html` for Docs, Sheets, Slides, Forms, Drawings, and other Google-native files. The cross-platform HTML opens the current `webViewLink` and needs only a browser.
+   - `pointer`: create Drive for desktop-compatible `.gdoc`, `.gsheet`, `.gslides`, `.gdraw`, `.gform`, and related JSON pointer files containing `doc_id`, `resource_key`, and account email. Unknown Google-native types fall back to HTML.
+   - `export`: export Docs to DOCX, Sheets to XLSX, Slides to PPTX, and Drawings to PNG. Fall back to `original-name.gdrive.html` for Forms and other non-exportable Google-native types.
+9. Link files use UTF-8 HTML, a no-JavaScript meta refresh, an escaped clickable fallback URL, and the escaped original document name. Dry-run reports them as `create_link`, `update_link`, or `skip_link`.
 
 ## Configuration
 
@@ -55,6 +68,7 @@ Use this schema in `<local-root>/gd-sync.yml`:
 
 ```yaml
 drive_folder_id: "Google Drive folder ID"
+google_native: "html"  # html | pointer | export
 last_sync_at: null
 ignore:
   - "gd-sync.yml"
@@ -65,19 +79,19 @@ ignore:
   - "*.tmp"
 ```
 
+- Use `html` when collaborators should open the live Drive document on Windows, macOS, or Linux with only a browser. Use `pointer` when Drive for desktop pointer compatibility is required. Use `export` when editable offline Office copies are preferred. Legacy `link` values are read as `html`.
 - Interpret ignore entries as path globs relative to the local root.
 - Apply ignore entries in both push and pull directions.
 - Treat a trailing `/` as a directory and all of its descendants.
 - Always ignore `gd-sync.yml` and the agent configuration directories `.agents/`, `.codex/`, and `.claude/`, even if a user removes them from the list.
-- Update `last_sync_at` only after a successful non-dry-run push.
-- Update `last_sync_at` only after a successful non-dry-run push or pull.
+- Update `last_sync_at` only after a successful non-dry-run push or pull. Dry-run changes neither files nor `last_sync_at`.
 - Refuse local symbolic links instead of silently following them.
 
 ## Authentication
 
 The script detects a missing CLI or base configuration. Run `gog auth list --check` before diagnosing an authentication problem. If inspection in a sandbox reports `missing --account`, a keyring lock, a read-only filesystem, or a permission error, state that authentication could not be inspected and retry with access to the existing keyring. Do not tell the user to reconfigure authentication based on those errors alone.
 
-Only if the unrestricted check confirms missing or invalid credentials or tokens, guide the user through:
+Only if the unrestricted check confirms missing or invalid credentials or tokens during push or pull, guide the user through:
 
 ```powershell
 gog auth credentials set <oauth-client.json>
