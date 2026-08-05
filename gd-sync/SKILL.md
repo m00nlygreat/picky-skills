@@ -5,7 +5,17 @@ description: Push or pull a local directory against a configured Google Drive fo
 
 # Google Drive Sync
 
-Reconcile a local folder with Google Drive in an explicitly selected direction. Push uses `gog drive sync push`; pull recursively lists and downloads Drive items. Never claim either operation is bidirectional. Push never deletes remote-only files, and pull never deletes local-only files.
+Reconcile a local folder with Google Drive. The default `sync` workflow compares each local file with its remote counterpart: newer remote files are pulled over local files, and newer local files are pushed over remote files. `push` and `pull` remain available as explicitly one-way operations. Sync never deletes remote-only or local-only files.
+
+### Freshness guard
+
+- For an existing file whose contents differ, compare the local filesystem modification time with the remote Drive `modifiedTime`.
+- Sync pulls only when the remote file is strictly newer than the local file, and pushes only when the local file is strictly newer than the remote file.
+- One-way pull overwrites only when the remote file is strictly newer than the local file. One-way push uploads only when the local file is strictly newer than the remote file.
+- If timestamps are equal or unavailable, the existing file is skipped conservatively.
+- An exact MD5 match is always skipped as already synchronized. New files are created normally.
+- Equal timestamps and missing remote timestamps are treated conservatively as conflicts so an existing file is never overwritten without a freshness signal. `last_sync_at` is informational and is not used as a global freshness cutoff.
+- The guard is implemented by `scripts/gd_sync.py`; invoking `gog drive sync push` directly bypasses it.
 
 ## Result reporting
 
@@ -15,13 +25,29 @@ Reconcile a local folder with Google Drive in an explicitly selected direction. 
 - If more than 30 files changed, list the first 30 paths and state how many additional files changed. If no files changed, state `Files changed: none`.
 - Dry-run output describes planned actions and must not be presented as completed file changes.
 
+## Sync workflow
+
+The default command is `sync`:
+
+```powershell
+python <skill-dir>/scripts/gd_sync.py --root <local-root> --dry-run
+```
+
+The dry run first shows remote-newer files that would be downloaded, then local-newer files that would be uploaded. Run without `--dry-run` to apply both phases:
+
+```powershell
+python <skill-dir>/scripts/gd_sync.py --root <local-root>
+```
+
+The remote phase runs first. This ensures that a remote-newer file is written locally before the upload phase stages files, while a local-newer file remains eligible for upload.
+
 ## Push workflow
 
 1. Identify the local root from the user's request. Use the current working directory only when the intended root is unambiguous.
 2. Run the bundled script in inspection mode first:
 
    ```powershell
-   python <skill-dir>/scripts/gd_sync.py --root <local-root> --dry-run
+   python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction push --dry-run
    ```
 
 3. If `gog` is missing or authentication is not configured, relay the script's setup guidance and stop. A keyring lock or filesystem permission error is an execution-environment problem, not proof that an account is missing. In a sandbox, rerun the same read-only inspection with permission to access the user's existing gog keyring before diagnosing authentication.
@@ -31,11 +57,12 @@ Reconcile a local folder with Google Drive in an explicitly selected direction. 
 7. Execute the push:
 
    ```powershell
-   python <skill-dir>/scripts/gd_sync.py --root <local-root>
+   python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction push
    ```
 
-8. Report whether the push completed, the new `last_sync_at` value, and a brief plain-text list of files actually created or updated.
-9. Exclude `.gdrive.html` files only when they contain gd-sync's generator marker, and exclude pointer files only when they contain gd-sync's warning plus a `doc_id`. Do not exclude user-authored ordinary HTML, including manually created `.gdrive.html` files without that marker.
+8. The script queries remote `modifiedTime` values before staging the push. Files reported as `skip_file ... remote is newer or same age` or `remote modifiedTime unavailable` are not passed to `gog drive sync push`.
+9. Report whether the push completed, the new `last_sync_at` value, and a brief plain-text list of files actually created or updated.
+10. Exclude `.gdrive.html` files only when they contain gd-sync's generator marker, and exclude pointer files only when they contain gd-sync's warning plus a `doc_id`. Do not exclude user-authored ordinary HTML, including manually created `.gdrive.html` files without that marker.
 
 ## Pull workflow
 
@@ -46,7 +73,7 @@ Reconcile a local folder with Google Drive in an explicitly selected direction. 
    python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction pull --dry-run
    ```
 
-3. Show files that would be created or overwritten. Pull never deletes local-only files.
+3. Show files that would be created or overwritten. For existing files, the script compares the remote `modifiedTime` with the local filesystem modification time; local-newer, equal-time, and missing-remote-time files are reported as skips. Pull never deletes local-only files.
 4. Do not overwrite local files unless the user explicitly requested pull or confirms after inspecting the dry-run.
 5. Execute pull:
 

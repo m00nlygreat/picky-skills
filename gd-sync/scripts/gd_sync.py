@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Safely push or pull a directory with Google Drive via gog CLI."""
+"""Synchronize a directory with Google Drive via gog CLI."""
 
 from __future__ import annotations
 
@@ -228,6 +228,70 @@ def file_md5(path: Path) -> str:
     return digest.hexdigest()
 
 
+def drive_modified_timestamp(item: dict[str, object]) -> float | None:
+    raw = str(item.get("modifiedTime") or "").strip()
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).timestamp()
+
+
+def remote_file_index(gog: str, folder_id: str) -> dict[str, dict[str, object]]:
+    result: dict[str, dict[str, object]] = {}
+
+    def visit(remote_id: str, relative: Path) -> None:
+        for item in list_drive_folder(gog, remote_id):
+            name = str(item.get("name") or "")
+            item_id = str(item.get("id") or "")
+            mime = str(item.get("mimeType") or "")
+            child = safe_child(relative, name)
+            if mime == FOLDER_MIME:
+                visit(item_id, child)
+                continue
+            key = child.as_posix().casefold()
+            if key in result:
+                raise ValueError(f"duplicate Drive path: {child.as_posix()}")
+            result[key] = item
+
+    visit(folder_id, Path())
+    return result
+
+
+def filter_staging_for_remote_newer(
+    staging: Path,
+    root: Path,
+    remote_files: dict[str, dict[str, object]],
+) -> int:
+    skipped = 0
+    for current, _dirs, files in os.walk(staging, topdown=True, followlinks=False):
+        current_path = Path(current)
+        for name in files:
+            staged = current_path / name
+            relative = staged.relative_to(staging)
+            remote = remote_files.get(relative.as_posix().casefold())
+            if remote is None:
+                continue
+
+            source = root / relative
+            remote_md5 = str(remote.get("md5Checksum") or "")
+            if remote_md5 and file_md5(source) == remote_md5:
+                continue
+
+            remote_mtime = drive_modified_timestamp(remote)
+            local_mtime = source.stat().st_mtime
+            if remote_mtime is None or remote_mtime >= local_mtime:
+                staged.unlink()
+                skipped += 1
+                reason = "remote modifiedTime unavailable" if remote_mtime is None else "remote is newer or same age"
+                print(f"skip_file\t{relative.as_posix()}\t{reason}")
+    return skipped
+
+
 def safe_child(parent: Path, name: str) -> Path:
     if not name or name in {".", ".."} or Path(name).name != name or "/" in name or "\\" in name:
         raise ValueError(f"unsafe Drive item name: {name!r}")
@@ -292,7 +356,7 @@ def list_drive_folder(gog: str, folder_id: str) -> list[dict[str, object]]:
     while True:
         command = [
             gog, "drive", "ls", "--parent", folder_id, "--max", "1000", "--json",
-            "--fields", "files(id,name,mimeType,md5Checksum,resourceKey,webViewLink),nextPageToken",
+            "--fields", "files(id,name,mimeType,md5Checksum,modifiedTime,resourceKey,webViewLink),nextPageToken",
         ]
         if page:
             command.extend(["--page", page])
@@ -387,6 +451,21 @@ def pull_tree(
                     print(f"skip_file\t{child.as_posix()}\tmd5 match")
                     continue
 
+            if target.is_file():
+                remote_mtime = drive_modified_timestamp(item)
+                local_mtime = target.stat().st_mtime
+                if remote_mtime is None or remote_mtime <= local_mtime:
+                    skips += 1
+                    if make_link:
+                        skip_action = "skip_link"
+                    elif make_pointer:
+                        skip_action = "skip_pointer"
+                    else:
+                        skip_action = "skip_file"
+                    reason = "remote modifiedTime unavailable" if remote_mtime is None else "local is newer or same age"
+                    print(f"{skip_action}\t{child.as_posix()}\t{reason}")
+                    continue
+
             if make_link:
                 action = "update_link" if target.exists() else "create_link"
             elif make_pointer:
@@ -467,10 +546,131 @@ def gog_failure_guidance(output: str) -> None:
         print("Only reconfigure credentials if that check confirms they are missing or invalid.", file=sys.stderr)
 
 
+def run_pull(
+    gog: str,
+    folder_id: str,
+    root: Path,
+    patterns: list[str],
+    config: dict[str, object],
+    config_path: Path,
+    dry_run: bool,
+    update_last_sync: bool = True,
+) -> int:
+    try:
+        creates, updates, skips, ignored_count = pull_tree(
+            gog,
+            folder_id,
+            root,
+            patterns,
+            dry_run,
+            str(config["google_native"]),
+            auth_email(gog) if config["google_native"] == "pointer" else "",
+        )
+    except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
+        print(f"Pull failed: {exc}", file=sys.stderr)
+        return 2
+    print(
+        f"Pull summary: create_files={creates} update_files={updates} "
+        f"skip_files={skips} ignored={ignored_count}"
+    )
+    if dry_run:
+        print("Pull dry run completed; local files and last_sync_at were not changed.")
+    elif update_last_sync:
+        config["last_sync_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        write_config(config_path, config)
+        print(f"Pull completed; last_sync_at={config['last_sync_at']}")
+    else:
+        print("Pull phase completed; last_sync_at will be updated after sync.")
+    return 0
+
+
+def run_push(
+    gog: str,
+    folder_id: str,
+    root: Path,
+    patterns: list[str],
+    config: dict[str, object],
+    config_path: Path,
+    dry_run: bool,
+    update_last_sync: bool = True,
+) -> int:
+    with tempfile.TemporaryDirectory(prefix="gd-sync-") as temp_name:
+        staging = Path(temp_name)
+        try:
+            files, skipped = stage_tree(root, staging, patterns)
+            remote_files = remote_file_index(gog, folder_id)
+            skipped_remote = filter_staging_for_remote_newer(staging, root, remote_files)
+        except (OSError, ValueError) as exc:
+            print(f"Could not prepare synchronization: {exc}", file=sys.stderr)
+            return 2
+        print(
+            f"Prepared {files} file(s); ignored {skipped} entry/entries; "
+            f"skipped {skipped_remote} remote-newer file(s)."
+        )
+        command = [gog, "drive", "sync", "push", str(staging), "--parent", folder_id]
+        if dry_run:
+            command.append("--dry-run")
+        completed = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8")
+
+    if completed.stdout:
+        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
+    if completed.stderr:
+        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
+
+    if completed.returncode != 0:
+        print("gog push failed.", file=sys.stderr)
+        gog_failure_guidance("\n".join((completed.stdout, completed.stderr)))
+        return completed.returncode
+    if dry_run:
+        print("Dry run completed; last_sync_at was not changed.")
+    elif update_last_sync:
+        config["last_sync_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        write_config(config_path, config)
+        print(f"Push completed; last_sync_at={config['last_sync_at']}")
+    else:
+        print("Push phase completed; last_sync_at will be updated after sync.")
+    return 0
+
+
+def run_sync(
+    gog: str,
+    folder_id: str,
+    root: Path,
+    patterns: list[str],
+    config: dict[str, object],
+    config_path: Path,
+    dry_run: bool,
+) -> int:
+    print("Sync compares local and remote modified times: newer local files are pushed; newer remote files are pulled.")
+    result = run_pull(gog, folder_id, root, patterns, config, config_path, dry_run, update_last_sync=False)
+    if result != 0:
+        return result
+    result = run_push(
+        gog,
+        folder_id,
+        root,
+        patterns,
+        config,
+        config_path,
+        dry_run,
+        update_last_sync=False,
+    )
+    if result == 0 and not dry_run:
+        config["last_sync_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        write_config(config_path, config)
+        print(f"Sync completed; last_sync_at={config['last_sync_at']}")
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".", help="local directory containing gd-sync.yml")
-    parser.add_argument("--direction", choices=("push", "pull"), default="push")
+    parser.add_argument(
+        "--direction",
+        choices=("sync", "push", "pull"),
+        default="sync",
+        help="sync both ways by modification time, or force one direction",
+    )
     parser.add_argument("--dry-run", action="store_true", help="show gog's reconciliation plan")
     args = parser.parse_args()
     root = Path(args.root).expanduser().resolve()
@@ -519,60 +719,11 @@ def main() -> int:
 
     patterns = [str(item) for item in config["ignore"]]
     if args.direction == "pull":
-        try:
-            creates, updates, skips, ignored_count = pull_tree(
-                gog,
-                folder_id,
-                root,
-                patterns,
-                args.dry_run,
-                str(config["google_native"]),
-                auth_email(gog) if config["google_native"] == "pointer" else "",
-            )
-        except (OSError, RuntimeError, ValueError, json.JSONDecodeError) as exc:
-            print(f"Pull failed: {exc}", file=sys.stderr)
-            return 2
-        print(
-            f"Pull summary: create_files={creates} update_files={updates} "
-            f"skip_files={skips} ignored={ignored_count}"
-        )
-        if args.dry_run:
-            print("Pull dry run completed; local files and last_sync_at were not changed.")
-        else:
-            config["last_sync_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-            write_config(config_path, config)
-            print(f"Pull completed; last_sync_at={config['last_sync_at']}")
-        return 0
+        return run_pull(gog, folder_id, root, patterns, config, config_path, args.dry_run)
+    if args.direction == "push":
+        return run_push(gog, folder_id, root, patterns, config, config_path, args.dry_run)
 
-    with tempfile.TemporaryDirectory(prefix="gd-sync-") as temp_name:
-        staging = Path(temp_name)
-        try:
-            files, skipped = stage_tree(root, staging, patterns)
-        except (OSError, ValueError) as exc:
-            print(f"Could not prepare synchronization: {exc}", file=sys.stderr)
-            return 2
-        print(f"Prepared {files} file(s); ignored {skipped} entry/entries.")
-        command = [gog, "drive", "sync", "push", str(staging), "--parent", folder_id]
-        if args.dry_run:
-            command.append("--dry-run")
-        completed = subprocess.run(command, check=False, capture_output=True, text=True, encoding="utf-8")
-
-    if completed.stdout:
-        print(completed.stdout, end="" if completed.stdout.endswith("\n") else "\n")
-    if completed.stderr:
-        print(completed.stderr, end="" if completed.stderr.endswith("\n") else "\n", file=sys.stderr)
-
-    if completed.returncode != 0:
-        print("gog push failed.", file=sys.stderr)
-        gog_failure_guidance("\n".join((completed.stdout, completed.stderr)))
-        return completed.returncode
-    if args.dry_run:
-        print("Dry run completed; last_sync_at was not changed.")
-    else:
-        config["last_sync_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-        write_config(config_path, config)
-        print(f"Push completed; last_sync_at={config['last_sync_at']}")
-    return 0
+    return run_sync(gog, folder_id, root, patterns, config, config_path, args.dry_run)
 
 
 if __name__ == "__main__":

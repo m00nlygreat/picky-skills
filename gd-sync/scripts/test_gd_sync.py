@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
+from datetime import datetime
 import importlib.util
 import io
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -23,6 +25,32 @@ class GdSyncTests(unittest.TestCase):
     def tearDown(self) -> None:
         gd_sync.list_drive_folder = self.original_list_drive_folder
         gd_sync.subprocess.run = self.original_subprocess_run
+
+    def test_sync_runs_pull_then_push_without_intermediate_last_sync_update(self) -> None:
+        calls = []
+        original_run_pull = gd_sync.run_pull
+        original_run_push = gd_sync.run_push
+        try:
+            gd_sync.run_pull = lambda *args, **kwargs: calls.append(("pull", kwargs)) or 0
+            gd_sync.run_push = lambda *args, **kwargs: calls.append(("push", kwargs)) or 0
+            with tempfile.TemporaryDirectory() as temp_name:
+                config = {"google_native": "html", "last_sync_at": "old"}
+                result = gd_sync.run_sync(
+                    "fake-gog",
+                    "folder",
+                    Path(temp_name),
+                    [],
+                    config,
+                    Path(temp_name) / "gd-sync.yml",
+                    True,
+                )
+            self.assertEqual(result, 0)
+            self.assertEqual([name for name, _kwargs in calls], ["pull", "push"])
+            self.assertTrue(all(kwargs["update_last_sync"] is False for _name, kwargs in calls))
+            self.assertEqual(config["last_sync_at"], "old")
+        finally:
+            gd_sync.run_pull = original_run_pull
+            gd_sync.run_push = original_run_push
 
     def test_config_defaults_to_html_and_accepts_modes_and_inline_comment(self) -> None:
         with tempfile.TemporaryDirectory() as temp_name:
@@ -203,6 +231,85 @@ class GdSyncTests(unittest.TestCase):
             sheet = (root / "입출고내역_전처리_실습_.gsheet").read_text(encoding="utf-8")
             self.assertIn('"doc_id":"1-VEv0yz1A1LdpEJKf8BxPTQaKEPkCVBjKTtFywVX0Y4"', sheet)
             self.assertIn('"email":"moonlygreat@gmail.com"', sheet)
+
+    def test_pull_skips_when_local_file_is_newer(self) -> None:
+        remote_time = "2026-08-05T10:00:00Z"
+        gd_sync.list_drive_folder = lambda _gog, _folder_id: [
+            {
+                "id": "file-id",
+                "name": "보고서.txt",
+                "mimeType": "text/plain",
+                "md5Checksum": "different-md5",
+                "modifiedTime": remote_time,
+            }
+        ]
+        with tempfile.TemporaryDirectory() as temp_name:
+            root = Path(temp_name)
+            target = root / "보고서.txt"
+            target.write_text("local newer", encoding="utf-8")
+            local_time = datetime.fromisoformat("2026-08-05T11:00:00+00:00").timestamp()
+            os.utime(target, (local_time, local_time))
+            output = io.StringIO()
+            with redirect_stdout(output):
+                result = gd_sync.pull_tree("fake-gog", "root", root, [], True, "html")
+            self.assertEqual(result, (0, 0, 1, 0))
+            self.assertIn("skip_file\t보고서.txt\tlocal is newer or same age", output.getvalue())
+
+    def test_pull_updates_when_remote_file_is_newer(self) -> None:
+        remote_time = "2026-08-05T11:00:00Z"
+        gd_sync.list_drive_folder = lambda _gog, _folder_id: [
+            {
+                "id": "file-id",
+                "name": "보고서.txt",
+                "mimeType": "text/plain",
+                "md5Checksum": "different-md5",
+                "modifiedTime": remote_time,
+            }
+        ]
+
+        class Completed:
+            returncode = 0
+
+        def fake_run(command, **_kwargs):
+            target = Path(command[command.index("--out") + 1])
+            target.write_text("remote newer", encoding="utf-8")
+            return Completed()
+
+        gd_sync.subprocess.run = fake_run
+        with tempfile.TemporaryDirectory() as temp_name:
+            root = Path(temp_name)
+            target = root / "보고서.txt"
+            target.write_text("local older", encoding="utf-8")
+            local_time = datetime.fromisoformat("2026-08-05T10:00:00+00:00").timestamp()
+            os.utime(target, (local_time, local_time))
+            with redirect_stdout(io.StringIO()):
+                result = gd_sync.pull_tree("fake-gog", "root", root, [], False, "html")
+            self.assertEqual(result, (0, 1, 0, 0))
+            self.assertEqual(target.read_text(encoding="utf-8"), "remote newer")
+
+    def test_push_filter_skips_remote_file_that_is_newer(self) -> None:
+        with tempfile.TemporaryDirectory() as root_name, tempfile.TemporaryDirectory() as staging_name:
+            root = Path(root_name)
+            staging = Path(staging_name)
+            source = root / "보고서.txt"
+            source.write_text("local older", encoding="utf-8")
+            local_time = datetime.fromisoformat("2026-08-05T10:00:00+00:00").timestamp()
+            os.utime(source, (local_time, local_time))
+            staged = staging / source.name
+            staged.parent.mkdir(parents=True, exist_ok=True)
+            staged.write_bytes(source.read_bytes())
+            remote_files = {
+                "보고서.txt": {
+                    "md5Checksum": "different-md5",
+                    "modifiedTime": "2026-08-05T11:00:00Z",
+                }
+            }
+            output = io.StringIO()
+            with redirect_stdout(output):
+                skipped = gd_sync.filter_staging_for_remote_newer(staging, root, remote_files)
+            self.assertEqual(skipped, 1)
+            self.assertFalse(staged.exists())
+            self.assertIn("skip_file\t보고서.txt\tremote is newer or same age", output.getvalue())
 
     def test_transformed_path_collision_is_an_error(self) -> None:
         gd_sync.list_drive_folder = lambda _gog, _folder_id: [
