@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const BASE_URL = process.env.INTERACT_URL || "http://127.0.0.1:5199";
+const BASE_URL = process.env.INTERACT_URL || "http://127.0.0.1:3000";
 const INTERACTION_ID = process.env.INTERACT_ID || "ongoing-demo";
 const DELAY_MS = Number(process.env.INTERACT_DELAY_MS || 3500);
 

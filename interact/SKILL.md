@@ -1,6 +1,6 @@
 ---
 name: interact
-description: Open a reusable local GUI for progress updates and ongoing human-in-the-loop interaction. Use progress mode to keep the user-facing screen current during multi-step work, and use human-in-the-loop mode when Codex needs the user to choose between visual options, answer structured questions, approve a direction, or give iterative feedback. The skill runs a project-scoped local server, updates the browser screen dynamically, supports multiple user submissions, and reads submitted JSON answers before continuing.
+description: Open a reusable local GUI for progress updates and ongoing human-in-the-loop interaction. Use progress mode to keep the user-facing screen current during multi-step work, and use human-in-the-loop mode when Codex needs the user to choose between visual options, answer structured questions, approve a direction, or give iterative feedback. The skill runs a project-scoped local server, updates the browser screen dynamically, supports multiple user submissions, reads submitted JSON answers before continuing, and shuts down after 30 minutes without an update or response.
 ---
 
 # Interact
@@ -14,6 +14,16 @@ There are two distinct usage modes:
 
 Do not treat this skill as only a final report surface. If the browser is open for an ongoing task, update it throughout the task.
 
+## Speed Priority
+
+Optimize this skill for fast screen updates and fast receipt of user responses. Treat `ask`, `update`, and `wait` as the primary operations, and keep schemas and status text as small as possible.
+
+- Send an `update` as soon as the next visible state is known; do not batch unrelated progress changes just to reduce calls.
+- After receiving an answer, process it and publish the next screen immediately.
+- Skip visual validation, screenshots, browser inspection, status checks, and other screen diagnostics whose only purpose is to confirm that the screen rendered. The server's polling and the command response are sufficient; investigate only when there is concrete failure evidence or the user explicitly asks for verification.
+- Do not pause to polish or inspect a screen before continuing the underlying task.
+- The server automatically shuts down after 30 minutes without a screen update or submitted response. Screen polling alone does not reset this inactivity timer.
+
 ## Workflow
 
 Run commands from the project root. The server and answer files are project-scoped under `.interact/`.
@@ -22,7 +32,7 @@ Run commands from the project root. The server and answer files are project-scop
 2. Ensure the server is running or let `ask` start it.
 3. Send the first schema with `ask`.
 4. Open the returned URL for the user, preferably with the in-app browser when available. Keep using this URL for later updates.
-5. When telling the user where to answer, provide the local server address as a Markdown link, such as `[Open interact GUI](http://127.0.0.1:5199/i/example)`. Do not show a bare localhost URL as the user-facing instruction.
+5. When telling the user where to answer, provide the local server address as a Markdown link, such as `[Open interact GUI](http://127.0.0.1:3000/i/example)`. The server prefers port 3000 and automatically uses a random available port if it is occupied. Do not show a bare localhost URL as the user-facing instruction.
 6. During work, call `update --id <interaction-id>` whenever the visible state should change. The already-open browser page polls the server and re-renders automatically.
 7. When user input is needed, call `wait --id <interaction-id> --after-seq <last-seq>`.
 8. Read the returned JSON and continue the original task.
@@ -33,8 +43,9 @@ Use this mode when the user should be able to watch what the agent is doing.
 
 Requirements:
 
-- For long or multi-step work, update the screen after meaningful tool results, before risky edits, while tests/builds are running, and after important outcomes.
+- For long or multi-step work, update the screen immediately after meaningful tool results, before risky edits, while tests/builds are running, and after important outcomes.
 - Do not wait until the final answer to update the GUI.
+- Do not wait for visual confirmation after an update; continue with the next task action.
 - Do not block on `wait` in progress mode unless the next step genuinely depends on user input.
 - Prefer `info` fields for status-only screens, because they do not require submission.
 - Keep status schemas short: current phase, what changed, next action, and any notable risk or blocker.
@@ -69,6 +80,7 @@ Requirements:
 - Use explicit answer fields such as `single-select`, `multi-select`, `textarea`, `boolean`, or `number`.
 - After each answer, store the returned `seq` and use `wait --after-seq <last-seq>` for the next user turn.
 - Update the screen after consuming the user's answer so they can see what the agent is doing next.
+- Publish that update immediately after consuming the answer; skip any visual inspection before continuing.
 - Avoid asking in the GUI when a simple chat question would be clearer.
 
 Example loop:
@@ -106,8 +118,8 @@ node .agents/skills/interact/scripts/interact-server.js ask --schema-json '{"tit
 ```json
 {
   "id": "interaction-id",
-  "url": "http://127.0.0.1:5199/i/interaction-id",
-  "markdownLink": "[Open interact GUI](http://127.0.0.1:5199/i/interaction-id)",
+  "url": "http://127.0.0.1:3000/i/interaction-id",
+  "markdownLink": "[Open interact GUI](http://127.0.0.1:3000/i/interaction-id)",
   "answerFile": ".interact/answers/interaction-id.json",
   "transcriptFile": ".interact/answers/interaction-id.jsonl"
 }

@@ -10,8 +10,9 @@ const { URL } = require("node:url");
 
 const APP_NAME = "codex-interact";
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 5199;
+const DEFAULT_PORT = 3000;
 const DEFAULT_TIMEOUT_SECONDS = 600;
+const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 main().catch((error) => {
   console.error(error.message || error);
@@ -139,7 +140,7 @@ async function ensureServer(root, args) {
   }
 
   const host = args.host || DEFAULT_HOST;
-  const preferredPort = Number(args.port || existing?.port || DEFAULT_PORT);
+  const preferredPort = Number(args.port || DEFAULT_PORT);
   const port = await findAvailablePort(host, preferredPort, root);
   const logFile = path.join(dirs.dir, "server.log");
 
@@ -173,6 +174,30 @@ async function serve(root, options) {
   const port = options.port;
   const url = `http://${host}:${port}`;
   const startedAt = new Date().toISOString();
+  let inactivityTimer;
+  let shutdownPromise;
+
+  const shutdown = async () => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      await rmIfExists(dirs.stateFile);
+      await new Promise((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections?.();
+      });
+      process.exit(0);
+    })();
+    return shutdownPromise;
+  };
+
+  const markActivity = () => {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      void shutdown();
+    }, INACTIVITY_TIMEOUT_MS);
+    inactivityTimer.unref?.();
+  };
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -203,6 +228,7 @@ async function serve(root, options) {
           await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
           await rmIfExists(path.join(dirs.answers, `${payload.id}.jsonl`));
         }
+        markActivity();
         return sendJson(res, {
           ok: true,
           id: payload.id,
@@ -219,6 +245,7 @@ async function serve(root, options) {
           const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
           await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
           await writeJson(dirs.activeFile, { id, updatedAt: new Date().toISOString() });
+          markActivity();
           return sendJson(res, {
             ok: true,
             id,
@@ -249,6 +276,7 @@ async function serve(root, options) {
         if (!interaction) return sendJson(res, { error: "interaction not found" }, 404);
 
         const payload = JSON.parse(await readBody(req) || "{}");
+        markActivity();
         const validation = validateAnswer(interaction, payload.values || {});
         if (validation.errors.length > 0) {
           return sendJson(res, { ok: false, errors: validation.errors }, 400);
@@ -279,12 +307,9 @@ async function serve(root, options) {
 
   await writeJson(dirs.stateFile, await buildState(dirs, { host, port, startedAt }));
 
-  const shutdown = async () => {
-    await rmIfExists(dirs.stateFile);
-    server.close(() => process.exit(0));
-  };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+  markActivity();
 }
 
 async function buildState(dirs, { host, port, startedAt }) {
@@ -458,15 +483,14 @@ async function pingState(state) {
 }
 
 async function findAvailablePort(host, startPort, root) {
-  for (let port = startPort; port < startPort + 50; port += 1) {
-    const occupiedByInteract = await pingState({ url: `http://${host}:${port}` });
-    if (occupiedByInteract) {
-      if (sameRoot(occupiedByInteract.root, root)) return port;
-      continue;
-    }
-    if (await canListen(host, port)) return port;
+  const occupiedByInteract = await pingState({ url: `http://${host}:${startPort}` });
+  if (occupiedByInteract) {
+    if (sameRoot(occupiedByInteract.root, root)) return startPort;
+  } else if (await canListen(host, startPort)) {
+    return startPort;
   }
-  throw new Error(`No available port found from ${startPort} to ${startPort + 49}`);
+
+  return findRandomAvailablePort(host);
 }
 
 function sameRoot(left, right) {
@@ -485,6 +509,27 @@ function canListen(host, port) {
     tester.once("error", () => resolve(false));
     tester.once("listening", () => tester.close(() => resolve(true)));
     tester.listen(port, host);
+  });
+}
+
+function findRandomAvailablePort(host) {
+  return new Promise((resolve, reject) => {
+    const tester = net.createServer();
+    tester.once("error", reject);
+    tester.once("listening", () => {
+      const address = tester.address();
+      const port = typeof address === "object" && address ? address.port : null;
+      tester.close((error) => {
+        if (error) {
+          reject(error);
+        } else if (port) {
+          resolve(port);
+        } else {
+          reject(new Error("Could not determine a random available port"));
+        }
+      });
+    });
+    tester.listen(0, host);
   });
 }
 
@@ -862,6 +907,11 @@ function renderPage(interaction) {
           input.type = field.type === "multi-select" ? "checkbox" : "radio";
           input.name = field.id;
           input.value = option.value;
+          if (field.type === "multi-select" && Array.isArray(field.default)) {
+            input.checked = field.default.includes(option.value);
+          } else if (field.type === "single-select" && field.default !== undefined) {
+            input.checked = field.default === option.value;
+          }
           const body = document.createElement("span");
           const title = document.createElement("span");
           title.className = "option-title";
@@ -1032,7 +1082,7 @@ function printJson(value) {
 
 function printHelp() {
   process.stdout.write(`Usage:
-  node interact-server.js ensure [--port 5199]
+  node interact-server.js ensure [--port 3000]
   node interact-server.js ask --schema schema.json [--wait] [--timeout 600]
   node interact-server.js ask --schema-json '{"title":"...","fields":[...]}' [--wait]
   node interact-server.js update --id <interaction-id> --schema schema.json
