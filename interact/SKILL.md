@@ -16,9 +16,9 @@ Do not treat this skill as only a final report surface. If the browser is open f
 
 ## Speed Priority
 
-Optimize this skill for fast screen updates and fast receipt of user responses. Treat `ask`, `update`, and `wait` as the primary operations, and keep schemas and status text as small as possible.
+Optimize this skill for fast screen updates and fast receipt of user responses. Treat `ask`, `update`, and `wait` as the primary operations.
 
-- Send an `update` as soon as the next visible state is known; do not batch unrelated progress changes just to reduce calls.
+- Send an `update` as soon as the next visible state is known; do not batch unrelated progress changes just to reduce calls. Open screens receive updates through an SSE stream.
 - After receiving an answer, process it and publish the next screen immediately.
 - Skip visual validation, screenshots, browser inspection, status checks, and other screen diagnostics whose only purpose is to confirm that the screen rendered. The server's polling and the command response are sufficient; investigate only when there is concrete failure evidence or the user explicitly asks for verification.
 - Do not pause to polish or inspect a screen before continuing the underlying task.
@@ -33,7 +33,7 @@ Run commands from the project root. The server and answer files are project-scop
 3. Send the first schema with `ask`.
 4. Open the returned URL for the user, preferably with the in-app browser when available. Keep using this URL for later updates.
 5. When telling the user where to answer, provide the local server address as a Markdown link, such as `[Open interact GUI](http://127.0.0.1:3000/i/example)`. The server prefers port 3000 and automatically uses a random available port if it is occupied. Do not show a bare localhost URL as the user-facing instruction.
-6. During work, call `update --id <interaction-id>` whenever the visible state should change. The already-open browser page polls the server and re-renders automatically.
+6. During work, call `update --id <interaction-id>` whenever the visible state should change. The already-open browser page receives the update through SSE and re-renders automatically.
 7. When user input is needed, call `wait --id <interaction-id> --after-seq <last-seq>`.
 8. Read the returned JSON and continue the original task.
 
@@ -106,6 +106,8 @@ node .agents/skills/interact/scripts/interact-server.js wait --id <interaction-i
 node .agents/skills/interact/scripts/interact-server.js status
 node .agents/skills/interact/scripts/interact-server.js stop
 ```
+
+The browser uses `EventSource` at `/api/interactions/<interaction-id>/events` for live updates. The endpoint sends JSON interaction payloads, keeps the connection alive with heartbeat comments, and supports automatic client reconnection. Answer submission remains a normal `POST` request.
 
 For quick one-off prompts, pass inline JSON:
 

@@ -176,6 +176,57 @@ async function serve(root, options) {
   const startedAt = new Date().toISOString();
   let inactivityTimer;
   let shutdownPromise;
+  const sseClients = new Map();
+
+  const broadcastInteraction = async (id) => {
+    const clients = sseClients.get(id);
+    if (!clients || clients.size === 0) return;
+    const interaction = await readInteraction(dirs, id);
+    if (!interaction) return;
+    const message = `data: ${JSON.stringify(interaction)}\n\n`;
+    for (const client of [...clients]) {
+      try {
+        client.write(message);
+      } catch {
+        clients.delete(client);
+      }
+    }
+    if (clients.size === 0) sseClients.delete(id);
+  };
+
+  const openInteractionStream = async (id, res) => {
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "x-accel-buffering": "no",
+    });
+    res.write("retry: 1000\n\n");
+    const interaction = await readInteraction(dirs, id);
+    if (interaction) res.write(`data: ${JSON.stringify(interaction)}\n\n`);
+
+    let clients = sseClients.get(id);
+    if (!clients) {
+      clients = new Set();
+      sseClients.set(id, clients);
+    }
+    clients.add(res);
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(": heartbeat\n\n");
+      } catch {
+        res.destroy();
+      }
+    }, 15_000);
+    heartbeat.unref?.();
+
+    res.on("close", () => {
+      clearInterval(heartbeat);
+      clients.delete(res);
+      if (clients.size === 0) sseClients.delete(id);
+    });
+  };
 
   const shutdown = async () => {
     if (shutdownPromise) return shutdownPromise;
@@ -224,6 +275,7 @@ async function serve(root, options) {
         const payload = normalizeInteraction(body.interaction || body, {});
         await writeJson(path.join(dirs.prompts, `${payload.id}.json`), payload);
         await writeJson(dirs.activeFile, { id: payload.id, updatedAt: new Date().toISOString() });
+        await broadcastInteraction(payload.id);
         if (body.clearAnswers !== false) {
           await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
           await rmIfExists(path.join(dirs.answers, `${payload.id}.jsonl`));
@@ -245,6 +297,7 @@ async function serve(root, options) {
           const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
           await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
           await writeJson(dirs.activeFile, { id, updatedAt: new Date().toISOString() });
+          await broadcastInteraction(id);
           markActivity();
           return sendJson(res, {
             ok: true,
@@ -258,6 +311,10 @@ async function serve(root, options) {
       if (req.method === "GET" && requestUrl.pathname.startsWith("/api/interactions/")) {
         const parts = requestUrl.pathname.split("/").filter(Boolean);
         const id = decodeURIComponent(parts[2] || "");
+
+        if (parts[3] === "events") {
+          return openInteractionStream(id, res);
+        }
 
         if (parts[3] === "answer") {
           const afterSeq = Number(requestUrl.searchParams.get("afterSeq") || 0);
@@ -817,33 +874,60 @@ function renderPage(interaction) {
     let interaction = ${boot};
     const app = document.querySelector("#app");
     let renderedKey = "";
+    let eventSource = null;
+    let reconnectTimer = null;
 
     if (!interaction) {
       app.innerHTML = '<div class="empty">아직 열린 질문이 없습니다.</div>';
     } else {
       render(interaction);
     }
-    setInterval(refreshInteraction, 1000);
+    connectInteractionStream();
 
-    async function refreshInteraction() {
+    function connectInteractionStream() {
       const id = interaction && interaction.id ? interaction.id : location.pathname.split("/").pop();
       if (!id) return;
-      try {
-        const response = await fetch("/api/interactions/" + encodeURIComponent(id), { cache: "no-store" });
-        if (!response.ok) return;
-        const next = await response.json();
-        if (!next) return;
-        const nextKey = next.id + ":" + (next.updatedAt || next.createdAt || "");
-        if (nextKey !== renderedKey) {
-          interaction = next;
-          render(next);
-        }
-      } catch {
-        // Keep the current screen while the server is unavailable.
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
+      eventSource?.close();
+      const source = new EventSource("/api/interactions/" + encodeURIComponent(id) + "/events");
+      eventSource = source;
+      source.onmessage = (event) => {
+        try {
+          const next = JSON.parse(event.data);
+          if (!next) return;
+          const currentId = interaction?.id || location.pathname.split("/").pop();
+          if (next.id !== currentId) return;
+          applyInteraction(next);
+        } catch {
+          // Ignore malformed updates and keep the current screen.
+        }
+      };
+      source.onerror = () => {
+        source.close();
+        if (eventSource !== source || reconnectTimer) return;
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = null;
+          connectInteractionStream();
+        }, 1000);
+      };
     }
 
-    function render(data) {
+    function applyInteraction(next) {
+        const nextKey = next.id + ":" + (next.updatedAt || next.createdAt || "");
+        if (nextKey !== renderedKey) {
+          const previousValues = app.querySelector("form") && interaction?.id === next.id
+            ? collectValues(interaction.fields || [])
+            : null;
+          interaction = next;
+          render(next, previousValues);
+        }
+    }
+
+    function render(data, preservedValues = null) {
+      const previousValues = preservedValues;
       renderedKey = data.id + ":" + (data.updatedAt || data.createdAt || "");
       app.innerHTML = "";
       const header = document.createElement("header");
@@ -890,6 +974,7 @@ function renderPage(interaction) {
       });
 
       app.append(header, form);
+      if (previousValues) restoreValues(data.fields || [], previousValues);
     }
 
     function renderField(field) {
@@ -1031,6 +1116,23 @@ function renderPage(interaction) {
         values[field.id] = input ? input.value : "";
       }
       return values;
+    }
+
+    function restoreValues(fields, values) {
+      for (const field of fields) {
+        if (field.type === "info" || !Object.prototype.hasOwnProperty.call(values, field.id)) continue;
+        if (field.type === "multi-select") {
+          const selected = new Set(Array.isArray(values[field.id]) ? values[field.id] : []);
+          for (const input of document.querySelectorAll('[name="' + cssEscape(field.id) + '"]')) {
+            input.checked = selected.has(input.value);
+          }
+          continue;
+        }
+        const input = document.querySelector('[name="' + cssEscape(field.id) + '"]');
+        if (!input) continue;
+        if (field.type === "boolean") input.checked = Boolean(values[field.id]);
+        else input.value = values[field.id];
+      }
     }
 
     function cssEscape(value) {
