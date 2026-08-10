@@ -7,6 +7,12 @@ description: Push or pull a local directory against a configured Google Drive fo
 
 Reconcile a local folder with Google Drive. The default `sync` workflow compares each local file with its remote counterpart: newer remote files are pulled over local files, and newer local files are pushed over remote files. `push` and `pull` remain available as explicitly one-way operations. Sync never deletes remote-only or local-only files.
 
+## Default invocation behavior
+
+- When the user invokes this skill without an explicit direction or mode (for example, `$gd-sync` or `$gd-sync 를 실행해`), treat it as an explicit request for a full bidirectional `sync`.
+- Run the `sync` dry-run internally as a preflight, then apply the non-dry-run `sync` automatically. Do not stop after displaying the dry-run or ask for an additional confirmation.
+- Use `inspect`, `dry-run`, `push`, `pull`, or `init` only when the user explicitly requests that mode.
+
 ### Freshness guard
 
 - For an existing file whose contents differ, compare the local filesystem modification time with the remote Drive `modifiedTime`.
