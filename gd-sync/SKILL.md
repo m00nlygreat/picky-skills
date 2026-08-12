@@ -1,6 +1,6 @@
 ---
 name: gd-sync
-description: Push or pull a local directory against a configured Google Drive folder with gog CLI. Use when the user asks to initialize, inspect, dry-run, upload, download, or synchronize a folder governed by gd-sync.yml, including ignore rules, Google-native HTML, pointer, or export handling, and last-sync tracking.
+description: Push, pull, or synchronize a local directory against a configured Google Drive folder with gog CLI. Use when the user asks to initialize, check status or planned changes, upload, download, or synchronize a folder governed by gd-sync.yml, including ignore rules, Google-native HTML, pointer, or export handling, and last-sync tracking.
 ---
 
 # Google Drive Sync
@@ -10,8 +10,9 @@ Reconcile a local folder with Google Drive. The default `sync` workflow compares
 ## Default invocation behavior
 
 - When the user invokes this skill without an explicit direction or mode (for example, `$gd-sync` or `$gd-sync 를 실행해`), treat it as an explicit request for a full bidirectional `sync`.
-- Run the `sync` dry-run internally as a preflight, then apply the non-dry-run `sync` automatically. Do not stop after displaying the dry-run or ask for an additional confirmation.
-- Use `inspect`, `dry-run`, `push`, `pull`, or `init` only when the user explicitly requests that mode.
+- Execute requested `sync`, `pull`, or `push` operations immediately without a dry-run preflight and without asking for an additional confirmation.
+- Run with `--dry-run` only when the user explicitly asks to check status, inspect current or planned changes, or perform a dry-run. A status check reports the plan and must not continue into a real operation.
+- Use `push`, `pull`, or `init` only when the user explicitly requests that mode. Otherwise default to `sync`.
 
 ### Freshness guard
 
@@ -31,15 +32,21 @@ Reconcile a local folder with Google Drive. The default `sync` workflow compares
 - If more than 30 files changed, list the first 30 paths and state how many additional files changed. If no files changed, state `Files changed: none`.
 - Dry-run output describes planned actions and must not be presented as completed file changes.
 
-## Sync workflow
+## Status workflow
 
-The default command is `sync`:
+Use dry-run only for an explicit status or planned-change request. Default to bidirectional status unless the user specifies push or pull status:
 
 ```powershell
 python <skill-dir>/scripts/gd_sync.py --root <local-root> --dry-run
+python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction push --dry-run
+python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction pull --dry-run
 ```
 
-The dry run first shows remote-newer files that would be downloaded, then local-newer files that would be uploaded. Run without `--dry-run` to apply both phases:
+Report the planned actions and stop. Do not automatically apply them after a status check.
+
+## Sync workflow
+
+The default command is `sync`. Run it directly without a dry-run preflight:
 
 ```powershell
 python <skill-dir>/scripts/gd_sync.py --root <local-root>
@@ -50,50 +57,36 @@ The remote phase runs first. This ensures that a remote-newer file is written lo
 ## Push workflow
 
 1. Identify the local root from the user's request. Use the current working directory only when the intended root is unambiguous.
-2. Run the bundled script in inspection mode first:
-
-   ```powershell
-   python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction push --dry-run
-   ```
-
-3. If `gog` is missing or authentication is not configured, relay the script's setup guidance and stop. A keyring lock or filesystem permission error is an execution-environment problem, not proof that an account is missing. In a sandbox, rerun the same read-only inspection with permission to access the user's existing gog keyring before diagnosing authentication.
+2. Inspect `gd-sync.yml`. Require a non-placeholder `drive_folder_id`. Preserve `gd-sync.yml` in the ignore list.
+3. If `gog` is missing or authentication is not configured, relay the script's setup guidance and stop. A keyring lock or filesystem permission error is an execution-environment problem, not proof that an account is missing. In a sandbox, rerun the authentication check with permission to access the user's existing gog keyring before diagnosing authentication.
 4. If `gd-sync.yml` is missing, the script creates it and stops. Ask the user to fill `drive_folder_id`, or fill it from a Drive folder URL/ID explicitly supplied by the user.
-5. Inspect `gd-sync.yml`. Require a non-placeholder `drive_folder_id`. Preserve `gd-sync.yml` in the ignore list.
-6. Show the dry-run result. Do not perform a real push unless the user requested synchronization or confirms after inspection.
-7. Execute the push:
+5. Execute the push immediately without a dry-run preflight:
 
    ```powershell
    python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction push
    ```
 
-8. The script queries remote `modifiedTime` values before staging the push. Files reported as `skip_file ... remote is newer or same age` or `remote modifiedTime unavailable` are not passed to `gog drive sync push`.
-9. Report whether the push completed, the new `last_sync_at` value, and a brief plain-text list of files actually created or updated.
-10. Exclude `.gdrive.html` files only when they contain gd-sync's generator marker, and exclude pointer files only when they contain gd-sync's warning plus a `doc_id`. Do not exclude user-authored ordinary HTML, including manually created `.gdrive.html` files without that marker.
+6. The script queries remote `modifiedTime` values before staging the push. Files reported as `skip_file ... remote is newer or same age` or `remote modifiedTime unavailable` are not passed to `gog drive sync push`.
+7. Report whether the push completed, the new `last_sync_at` value, and a brief plain-text list of files actually created or updated.
+8. Exclude `.gdrive.html` files only when they contain gd-sync's generator marker, and exclude pointer files only when they contain gd-sync's warning plus a `doc_id`. Do not exclude user-authored ordinary HTML, including manually created `.gdrive.html` files without that marker.
 
 ## Pull workflow
 
 1. Inspect `gd-sync.yml` and require a non-placeholder `drive_folder_id`.
-2. Run pull in inspection mode first:
-
-   ```powershell
-   python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction pull --dry-run
-   ```
-
-3. Show files that would be created or overwritten. For existing files, the script compares the remote `modifiedTime` with the local filesystem modification time; local-newer, equal-time, and missing-remote-time files are reported as skips. Pull never deletes local-only files.
-4. Do not overwrite local files unless the user explicitly requested pull or confirms after inspecting the dry-run.
-5. Execute pull:
+2. Execute pull immediately without a dry-run preflight:
 
    ```powershell
    python <skill-dir>/scripts/gd_sync.py --root <local-root> --direction pull
    ```
 
-6. Report created, updated, skipped, and ignored counts plus the new `last_sync_at` value and a brief plain-text list of files actually created or updated.
-7. Treat same-name transformed remote paths, unsafe names, and file/folder type conflicts as errors instead of guessing.
-8. Handle Google-native documents according to `google_native`:
+3. For existing files, the script compares the remote `modifiedTime` with the local filesystem modification time; local-newer, equal-time, and missing-remote-time files are skipped. Pull never deletes local-only files.
+4. Report created, updated, skipped, and ignored counts plus the new `last_sync_at` value and a brief plain-text list of files actually created or updated.
+5. Treat same-name transformed remote paths, unsafe names, and file/folder type conflicts as errors instead of guessing.
+6. Handle Google-native documents according to `google_native`:
    - `html` (default): create `original-name.gdrive.html` for Docs, Sheets, Slides, Forms, Drawings, and other Google-native files. The cross-platform HTML opens the current `webViewLink` and needs only a browser.
    - `pointer`: create Drive for desktop-compatible `.gdoc`, `.gsheet`, `.gslides`, `.gdraw`, `.gform`, and related JSON pointer files containing `doc_id`, `resource_key`, and account email. Unknown Google-native types fall back to HTML.
    - `export`: export Docs to DOCX, Sheets to XLSX, Slides to PPTX, and Drawings to PNG. Fall back to `original-name.gdrive.html` for Forms and other non-exportable Google-native types.
-9. Link files use UTF-8 HTML, a no-JavaScript meta refresh, an escaped clickable fallback URL, and the escaped original document name. Dry-run reports them as `create_link`, `update_link`, or `skip_link`.
+7. Link files use UTF-8 HTML, a no-JavaScript meta refresh, an escaped clickable fallback URL, and the escaped original document name. Dry-run reports them as `create_link`, `update_link`, or `skip_link` during an explicit status check.
 
 ## Configuration
 
