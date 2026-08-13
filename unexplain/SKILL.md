@@ -1,9 +1,14 @@
 ---
 name: unexplain
-description: 사용자가 어떤 개념, 기술, 용어, 표현, 패턴, 아이디어를 "설명해줘", "이게 뭐야", "어떻게 동작해", "왜 쓰는 거야"라고 물을 때 반드시 사용하는 스킬. 대상을 한 덩어리 명사로 두지 않고 부품으로 분해한 뒤, 마케팅적 추상과 교과서적 정의를 걷어내고, 무게중심·목적과 과정의 동시 노출·구체 실체로의 환원을 통해 설명한다. 응답 포맷은 매번 다르게 결정되며 섹션 헤더·체크리스트를 강제하지 않는다. 기술 개념, 프로그래밍 패턴, 영어 관용 표현, 철학 용어, 비즈니스 개념, 제품 등 모든 종류의 개념 설명에 적용한다. 기존 설명을 더 잘 다듬는 스킬이 아니라, 굳어진 설명을 거부하고 다시 시작하는 스킬이다.
+description: "Use only when the user explicitly invokes `$unexplain` or explicitly asks to use the unexplain skill. Never trigger from a generic request to explain, define, summarize, or clarify a concept. When explicitly selected, decompose the target into concrete parts, strip away marketing and textbook abstraction, identify its center of gravity, show purpose together with process, and add an independent interpretation."
 ---
 
 # Unexplain
+
+## 발동 조건
+
+- `$unexplain`을 직접 호출하거나 사용자가 `unexplain` 스킬을 사용하라고 명시한 경우에만 적용한다.
+- 일반적인 설명·정의·요약·명확화 요청이나 `설명해줘`, `이게 뭐야` 같은 표현만으로는 적용하지 않는다. 그런 경우에는 일반 응답 방식으로 답한다.
 
 이 스킬은 **응답 템플릿이 아니라 설명의 철학**을 정의한다. 아래 원칙들을 충족하는 한 응답의 모양은 매번 자유롭게 결정한다. 섹션 헤더를 쓸 수도 있고 안 쓸 수도 있다. 두 단락으로 끝낼 수도 있고 여러 단계로 풀 수도 있다. 표나 코드를 넣을 수도 있고 산문으로만 갈 수도 있다. **중요한 건 원칙들의 충족 여부지 구조의 일치가 아니다.** 더 잘 설명하려는 스킬이 아니라, 이미 굳어진 설명을 의심하고 처음부터 다시 설명하는 스킬이다.
 
