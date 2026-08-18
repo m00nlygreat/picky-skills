@@ -11,7 +11,7 @@ Codex에서 반복 작업을 빠르고 일관되게 처리하기 위한 실용 �
 | `deck-reviewer` | 발표 자료의 구성, 문장, 밀도, 시각적 반복을 점검하고 개선합니다. |
 | `design` | 요구사항을 화면별 STN 설계 문서로 구체화합니다. |
 | `extract-eml-attachments` | EML 파일의 첨부물을 추출하고 원본 메일에서 분리합니다. |
-| `gd-sync` | 기본 호출과 sync, pull, push 요청은 dry-run 없이 즉시 실행하고, status·예정 변경 확인을 명시한 경우에만 dry-run을 수행합니다. |
+| `gd-sync` | 기본 호출과 sync, pull, push 요청을 별도 미리보기 없이 즉시 실행하여 Google Drive와 로컬 폴더를 동기화합니다. |
 | `ia` | 서비스 기획이나 PRD를 화면 중심의 정보 구조로 정리합니다. |
 | `interact` | SSE로 화면을 실시간 갱신하고 응답을 받으며, 기본 3000 포트(점유 시 랜덤 포트)와 30분 유휴 자동 종료를 지원하는 로컬 대화형 화면을 엽니다. |
 | `ppt2pdf` | PowerPoint 파일을 PDF로 일괄 변환합니다. |
