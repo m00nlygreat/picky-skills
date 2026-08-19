@@ -28,6 +28,14 @@ GOOGLE_EXPORTS = {
 }
 GOOGLE_NATIVE_MODES = {"html", "pointer", "export"}
 GOOGLE_NATIVE_ALIASES = {"link": "html"}
+
+
+def configure_stdio() -> None:
+    """Keep status output safe for Windows consoles with a non-UTF-8 default."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 LINK_SUFFIX = ".gdrive.html"
 GENERATED_LINK_MARKER = '<meta name="generator" content="gd-sync">'
 POINTER_EXTENSIONS = {
@@ -663,6 +671,7 @@ def run_sync(
 
 
 def main() -> int:
+    configure_stdio()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".", help="local directory containing gd-sync.yml")
     parser.add_argument(
