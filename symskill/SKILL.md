@@ -95,7 +95,7 @@ Windows에서 심볼릭 링크 권한 오류가 발생하면 현재 환경에서
 ## 원본 갱신
 
 - Git 묶음은 출처와 작업 상태를 확인한 뒤 `git -C "<repo-group>" pull --ff-only`로 갱신한다. 로컬 변경이나 분기 충돌이 있으면 보존하고 충돌 내용을 보고한다.
-- CLI 묶음은 [references/npx-skills.md](references/npx-skills.md)의 갱신 절차를 따른다.
+- CLI 묶음은 해당 원본 묶음 루트(`~/.symskill/<repo-group>`)에서 `npx skills update <skill-name> --project --yes`로 요청한 스킬을 갱신한다. 묶음 전체의 갱신을 요청받으면 `npx skills update --project --yes`를 사용한다. 작업 폴더 선택, 수동 변경 보존, OS별 실행 예시는 [references/npx-skills.md](references/npx-skills.md)의 갱신 워크플로우를 따른다.
 - 원본 경로가 유지되면 프로젝트 링크를 다시 만들 필요가 없다. 스킬이 이동하거나 이름이 바뀌면 요청받은 프로젝트의 링크를 새 원본으로 연결한다.
 - 갱신 후 연결을 통해 변경된 원본과 리소스를 읽을 수 있는지 확인하고, 해당 원본을 쓰는 프로젝트들에 변경이 반영된다는 점을 결과에 알린다.
 
