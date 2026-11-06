@@ -1,0 +1,41 @@
+{
+  "id": "visual-choice-demo",
+  "title": "Pick a card layout",
+  "description": "Two candidate layouts are rendered below. Pick one, or describe what to change.",
+  "submitLabel": "Use this layout",
+  "fields": [
+    {
+      "id": "brief",
+      "type": "markdown",
+      "label": "What changed",
+      "content": "## Both options\n\n- share the same type scale\n- differ only in `gap` and card padding\n\n```css\n.card { gap: 12px; padding: 16px; }\n```"
+    },
+    {
+      "id": "layout",
+      "type": "single-select",
+      "label": "Layout",
+      "required": true,
+      "default": "airy",
+      "options": [
+        {
+          "value": "dense",
+          "label": "Dense",
+          "description": "More cards above the fold",
+          "image": "examples/assets/option-dense.png"
+        },
+        {
+          "value": "airy",
+          "label": "Airy",
+          "description": "Easier to scan on a projector",
+          "image": "examples/assets/option-airy.png"
+        }
+      ]
+    },
+    {
+      "id": "notes",
+      "type": "textarea",
+      "label": "Anything to change first?",
+      "placeholder": "Optional"
+    }
+  ]
+}
