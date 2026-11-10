@@ -15,9 +15,9 @@ DOCUMENT_ROLES = {
     "TERMS": "는 프로젝트 용어와 GUI 표시명의 유지본이다. 용어, 명명 기준, 화면 표시명을 정리하거나 갱신할 때 이 파일을 함께 관리한다.",
     "LOG": "에는 프로젝트 관련 중대 결정사항, 새로 알아낸 사실, 방향 변경을 시간순으로 남긴다.",
 }
-ONTOLOGY_PATH = "ONTOLOGY.yml"
+ONTOLOGY_PATH = "ONTOLOGY.yaml"
 CSV_GUIDE_PATH = "wiki/CSV_GUIDE.md"
-ONTOLOGY_BULLET = "- [ONTOLOGY.yml](ONTOLOGY.yml)은 프로젝트의 개념·관계·데이터 소스와 찾는 방법의 유지본이다. 관련 정보를 조회하거나 변경할 때 먼저 참조한다."
+ONTOLOGY_BULLET = "- [ONTOLOGY.yaml](ONTOLOGY.yaml)은 프로젝트의 개념·관계·데이터 소스와 찾는 방법의 유지본이다. 관련 정보를 조회하거나 변경할 때 먼저 참조한다."
 ONTOLOGY_RULES = [
     "- 온톨로지에는 프로젝트 구조에 필요한 개념·관계·소스를 기록하고, 필요한 속성을 프로젝트에 맞게 확장한다.",
     "- 온톨로지의 추가·수정·삭제·이름·구조·서식 변경은 구체적인 사용자 요청 또는 명시적으로 승인받은 변경안의 범위에서만 수행한다. 오탈자·서식 수정도 예외가 아니다.",
@@ -86,7 +86,7 @@ def selected_documents(project_root, raw_documents):
             token = token.strip()
             if not token:
                 continue
-            if token.upper() in ("ONTOLOGY", "ONTOLOGY.YML"):
+            if token.upper() in ("ONTOLOGY", "ONTOLOGY.YAML"):
                 ontology = True
                 continue
             path = project_path(project_root, token)
@@ -237,7 +237,7 @@ def main():
     parser = argparse.ArgumentParser(description="Create or register project documents and their wiki guidance.")
     parser.add_argument("documents", nargs="*", help="Arbitrary document names or project-relative paths. Bare names use wiki/NAME.md.")
     parser.add_argument("--project-root", default=".", help="Project root. Default: current directory.")
-    parser.add_argument("--ontology", action="store_true", help="Initialize or connect the special ONTOLOGY.yml document.")
+    parser.add_argument("--ontology", action="store_true", help="Initialize or connect the special ONTOLOGY.yaml document.")
     parser.add_argument("--csv-header", nargs=2, action="append", default=[], metavar=("PATH", "HEADER"), help="Create a new CSV with an explicitly chosen header row.")
     parser.add_argument("--force", action="store_true", help="Overwrite selected Markdown starter files only; preserve existing CSV and ontology data.")
     args = parser.parse_args()

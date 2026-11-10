@@ -33,19 +33,19 @@ class InitWikiTests(unittest.TestCase):
 
     def test_markdown_selection_preserves_templates_and_does_not_enable_ontology(self):
         self.run_init("term,log")
-        self.assertFalse((self.root / "ONTOLOGY.yml").exists())
+        self.assertFalse((self.root / "ONTOLOGY.yaml").exists())
         self.assertEqual({path.name for path in (self.root / "wiki").iterdir()}, {"TERMS.md", "LOG.md"})
         for name in ("TERMS.md", "LOG.md"):
             self.assertEqual((self.root / "wiki" / name).read_bytes(), (TEMPLATES / name).read_bytes())
 
     def test_ontology_only_uses_project_root_without_creating_markdown_documents(self):
-        self.run_init("ontology")
-        self.assertEqual({path.name for path in self.root.iterdir()}, {"ONTOLOGY.yml", "AGENTS.md"})
-        ontology = (self.root / "ONTOLOGY.yml").read_text(encoding="utf-8")
+        self.run_init("ONTOLOGY.yaml")
+        self.assertEqual({path.name for path in self.root.iterdir()}, {"ONTOLOGY.yaml", "AGENTS.md"})
+        ontology = (self.root / "ONTOLOGY.yaml").read_text(encoding="utf-8")
         self.assertNotIn("<", ontology)
         self.assertNotIn("primary_record", ontology)
         agents = (self.root / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("](ONTOLOGY.yml)", agents)
+        self.assertIn("](ONTOLOGY.yaml)", agents)
         self.assertNotIn("](wiki/)", agents)
 
     def test_arbitrary_document_names_and_locations_are_supported(self):
@@ -53,18 +53,18 @@ class InitWikiTests(unittest.TestCase):
         self.assertTrue((self.root / "wiki" / "ARCHITECTURE.md").is_file())
         self.assertTrue((self.root / "docs" / "operations.md").is_file())
         self.assertTrue((self.root / "README.md").is_file())
-        self.assertFalse((self.root / "ONTOLOGY.yml").exists())
+        self.assertFalse((self.root / "ONTOLOGY.yaml").exists())
         self.assertFalse((self.root / "wiki" / "TERMS.md").exists())
         agents = (self.root / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("](docs/operations.md)", agents)
         self.assertIn("](README.md)", agents)
 
     def test_existing_ontology_is_preserved_even_with_force(self):
-        ontology = self.root / "ONTOLOGY.yml"
+        ontology = self.root / "ONTOLOGY.yaml"
         original = "# 사용자 정본\r\n기존구조:\r\n  유지: true\r\n".encode("utf-8")
         ontology.write_bytes(original)
         modified = ontology.stat().st_mtime_ns
-        self.run_init("ONTOLOGY", force=True)
+        self.run_init("--ontology", force=True)
         self.assertEqual(ontology.read_bytes(), original)
         self.assertEqual(ontology.stat().st_mtime_ns, modified)
 
@@ -72,7 +72,7 @@ class InitWikiTests(unittest.TestCase):
         self.run_init("TERMS", "LOG", "ONTOLOGY")
         terms = self.root / "wiki" / "TERMS.md"
         log = self.root / "wiki" / "LOG.md"
-        ontology = self.root / "ONTOLOGY.yml"
+        ontology = self.root / "ONTOLOGY.yaml"
         terms.write_text("사용자 용어", encoding="utf-8")
         log.write_text("사용자 기록", encoding="utf-8")
         ontology.write_text("사용자 온톨로지", encoding="utf-8")
@@ -102,8 +102,8 @@ class InitWikiTests(unittest.TestCase):
         self.assertTrue(updated.startswith(prefix + section))
         self.assertTrue(updated.endswith(suffix))
         self.assertNotIn("\n", updated.replace("\r\n", ""))
-        self.assertLess(updated.index("](ONTOLOGY.yml)"), updated.index("## 배포"))
-        self.assertGreater(updated.index("](ONTOLOGY.yml)"), updated.index("~~~\r\n"))
+        self.assertLess(updated.index("](ONTOLOGY.yaml)"), updated.index("## 배포"))
+        self.assertGreater(updated.index("](ONTOLOGY.yaml)"), updated.index("~~~\r\n"))
 
     def test_repeated_initialization_does_not_rewrite_any_project_file(self):
         self.run_init("TERMS", "LOG", "ONTOLOGY")
@@ -129,7 +129,7 @@ class InitWikiTests(unittest.TestCase):
         content = agents.read_text(encoding="utf-8")
         self.assertIn(custom, content)
         self.assertEqual(content.count("](wiki/TERMS.md)"), 1)
-        self.assertEqual(content.count("](ONTOLOGY.yml)"), 1)
+        self.assertEqual(content.count("](ONTOLOGY.yaml)"), 1)
 
     def test_known_legacy_generated_links_are_updated_without_removing_custom_text(self):
         wiki = self.root / "wiki"
@@ -167,7 +167,7 @@ class InitWikiTests(unittest.TestCase):
         self.assertIn("](data/TERMS.csv)", agents)
         self.assertIn("](wiki/CSV_GUIDE.md)", agents)
         self.assertIn("infer_schema => false", agents)
-        self.assertFalse((self.root / "ONTOLOGY.yml").exists())
+        self.assertFalse((self.root / "ONTOLOGY.yaml").exists())
 
     def test_existing_csv_is_preserved_even_with_force_and_another_header(self):
         target = self.root / "TASKS.csv"
