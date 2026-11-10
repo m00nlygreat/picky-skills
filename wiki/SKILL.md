@@ -1,78 +1,53 @@
 ---
 name: wiki
-description: Initialize and maintain a lightweight project wiki under ./wiki, with selectable modules such as LOG, TERMS, REQUIREMENT, and MVP. Use when Codex needs to create wiki files from templates, update project terminology or requirements docs, append decision logs, or inject wiki usage instructions into AGENTs.md.
+description: Manage project documents in their existing locations, using Markdown by default and CSV only when the user requests it. Use for project wiki maintenance, AGENTS.md guidance, and optional ontologies under strict user control.
 ---
 
 # Wiki
 
-Create and maintain a compact project wiki in `./wiki`. Keep documents Korean, short, and operational.
+프로젝트와 함께 관리하는 모든 문서를 위키로 관리한다. 문서의 이름·종류·개수·형식·위치는 프로젝트 구조와 사용자 요청에 맞게 정한다. 기존 문서의 위치와 내용을 존중하며, 새 관리 문서를 모을 때는 `wiki/`를 활용할 수 있다.
 
-## Modules
+## 관리 범위와 제안
 
-Available modules:
+- `LOG`, `TERMS`, `REQUIREMENT`, `MVP`는 결정·용어·요구사항·범위를 정리하는 문서의 제안 예시다. 고정 모듈이나 필수 선택 목록으로 취급하지 않는다.
+- README, 설계, 운영, 조사, 일정, 데이터 사전 등 프로젝트와 함께 유지하는 문서도 같은 방식으로 생성·정리·연결·갱신한다. 문서 이름이나 위치가 예시와 달라도 관리한다.
+- 위키는 Markdown(`.md`)을 기본으로 구성하고, CSV는 사용자 요청이 있을 때만 사용한다. 기존 문서를 정해진 이름·형식·폴더로 일괄 변환하거나 옮기지 않는다.
+- 온톨로지는 별도 구성·변경 규칙이 있는 특수 문서다. 이를 요청했거나 기존 온톨로지를 다룰 때 [온톨로지 구성·관리](references/ontology.md)를 읽는다.
+- 사용자가 CSV를 요청했으면 [CSV 사용법](references/csv.md)을 읽는다. 프로젝트의 열·고유 키·정본과 사본·기존 도우미를 확인하고 사용법을 프로젝트 에이전트 지침에 연결한다.
 
--   `LOG`: chronological project decisions, facts, and direction changes.
-    
--   `TERMS` or `TERM`: project terms, naming rules, and GUI display names.
-    
--   `REQUIREMENT`: current requirements summary.
-    
--   `MVP`: current minimum product scope.
-    
+## 구성과 유지
 
-Templates live in `templates/`:
+1. 프로젝트 구조, 관리 중인 문서, 에이전트 지침과 사용자 요청을 확인한다. 필요한 문서를 판단해 작업하며, 정해진 문서 목록을 고르도록 요구하지 않는다.
+2. 요청한 문서를 기존 위치에서 갱신하거나 필요한 이름·형식으로 만든다. 문서의 역할, 찾는 방법, 언제 갱신할지를 짧게 정리한다. 기존 YAML frontmatter와 사용자 작성 내용은 보존한다.
+3. 결정·용어·요구사항·범위 등 바뀐 정보는 해당 역할을 맡은 문서에 반영한다. 역할은 실제 내용과 프로젝트 관례로 판단하며 파일명이나 확장자로 고정하지 않는다.
+4. CSV의 신규 열은 사용자 요청과 프로젝트 근거에 따라 정한다. 미확인 필드·ID·날짜·상태를 임의로 채우지 않는다. 기존 CSV는 프로젝트 도우미와 CSV 사용법에 따라 변경한다.
+5. 에이전트 지침에 관리 범위, 관련 문서의 상대 경로 링크·역할·관리 방법과 필요한 도구 사용법을 연결한다.
+6. 요청한 생성·변경과 그에 맞는 검증을 완료한다. 원본 자료 폴더는 사용자가 요청하지 않는 한 수정하지 않는다.
 
--   `templates/LOG.md`
-    
--   `templates/TERMS.md`
-    
--   `templates/REQUIREMENT.md`
-    
--   `templates/MVP.md`
-    
+## 초기화·연결 도우미
 
-Each template includes YAML frontmatter describing the document role and how to use it. Preserve that frontmatter when copying or updating wiki documents.
+`scripts/init_wiki.py`는 반복적인 파일 생성과 지침 연결을 돕는 선택 도구다. 문서 관리의 범위를 이 도우미나 내장 템플릿 목록으로 한정하지 않는다.
 
-Use `scripts/init_wiki.py` for initialization when possible:
+- 문서명만 주면 `wiki/<이름>.md`, 확장자가 있는 경로를 주면 프로젝트의 해당 위치를 사용한다. 임의의 문서명·하위 경로를 받을 수 있다.
+- 내장 템플릿과 이름이 맞는 Markdown에는 그 템플릿을 사용한다. 다른 Markdown은 제목을 가진 시작 문서를 만든다. 실제 요청 내용은 이어서 작성한다.
+- 기존 형식의 문서는 해당 형식에 맞는 도구로 작성·수정하고, 도우미에는 기존 경로를 넘겨 지침만 연결할 수 있다.
+- CSV는 사용자 요청이 있을 때만 사용한다. 신규 CSV에는 헤더를 명시한다. CSV가 있으면 보존하고, 사용법을 `wiki/CSV_GUIDE.md`에 연결해 에이전트가 참조할 수 있게 한다.
+- 인자 없이 실행해도 기존 `wiki/` 문서와 일반 관리 지침을 연결한다. 정해진 문서를 자동으로 모두 생성하지 않는다.
+- 온톨로지를 구성할 때만 `--ontology`를 사용한다. 기존 정본을 보존하며, 새 정본의 빈 목록은 시작 구조다.
+- `--force`는 사용자가 요청한 Markdown 시작 문서 덮어쓰기에만 사용한다. 기존 CSV와 온톨로지는 이 옵션으로 덮어쓰지 않는다.
 
-```bash
-python path/to/wiki/scripts/init_wiki.py --project-root . LOG TERMS REQUIREMENT MVP
-```
-## Initialize
+~~~bash
+python path/to/wiki/scripts/init_wiki.py --project-root .
+python path/to/wiki/scripts/init_wiki.py --project-root . LOG wiki/ARCHITECTURE.md README.md
+python path/to/wiki/scripts/init_wiki.py --project-root . data/TERMS.csv --csv-header data/TERMS.csv "name,label,meaning"
+python path/to/wiki/scripts/init_wiki.py --project-root . --ontology
+~~~
 
-1. Work from the project root and use `./wiki`.
-2. Inspect existing `wiki/` and `AGENTs.md` before editing.
-3. If the user names modules, create only those modules. Normalize `TERM` to `TERMS`.
-4. If the user asks to initialize a wiki but does not choose modules, ask which modules to include. Offer `LOG`, `TERMS`, `REQUIREMENT`, and `MVP`.
-5. Create `./wiki` if needed.
-6. Copy selected templates into `./wiki/{MODULE}.md`; prefer `scripts/init_wiki.py` for this.
-7. Do not overwrite existing wiki files unless the user explicitly asks. If a file exists, update it in place only when the requested change requires it.
-8. Inject or update the `## 위키 관리` section in `AGENTs.md`.
+## 에이전트 지침 연결
 
-## [AGENTs.md](http://AGENTs.md) Injection
-
-Add or maintain instructions like this, adjusted to the selected modules:
-```
-## 위키 관리
-
-- 이 저장소의 간단한 위키는 [wiki](wiki/)에 둔다.
-- 위키 문서는 한국어로 짧고 명확하게 작성한다.
-- 위키 문서나 프로젝트 문서를 참조할 때는 백틱 경로 대신 반드시 마크다운 링크와 프로젝트 기준 상대 경로를 사용한다. 예: [요구사항](wiki/REQUIREMENT.md).
-- [wiki/REQUIREMENT.md](wiki/REQUIREMENT.md)는 현재 요구사항 요약의 유지본이다. 요구사항을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- [wiki/MVP.md](wiki/MVP.md)는 현재 MVP 범위의 유지본이다. MVP 범위를 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- [wiki/TERMS.md](wiki/TERMS.md)는 프로젝트 용어와 GUI 표시명의 유지본이다. 용어, 명명 기준, 화면 표시명을 정리하거나 갱신할 때 이 파일을 함께 관리한다.
-- [wiki/LOG.md](wiki/LOG.md)에는 프로젝트 관련 중대 결정사항, 새로 알아낸 사실, 방향 변경을 시간순으로 남긴다.
-- 원본 자료 폴더는 사용자가 요청하지 않는 한 수정하지 않는다.
-```
-
-Only include bullets for modules that exist or are being created, except for the general wiki rules.
-
-## Maintain
-
-- Keep wiki files as living summaries, not raw dumps.
-- When referencing wiki or project documents, use Markdown links with project-relative paths instead of backticked paths. Example: `[요구사항](wiki/REQUIREMENT.md)`.
-- Update [wiki/LOG.md](wiki/LOG.md) when a major decision, new fact, or direction change is made.
-- Update [wiki/TERMS.md](wiki/TERMS.md) when naming, GUI labels, or forbidden/주의 표현 change.
-- Update [wiki/REQUIREMENT.md](wiki/REQUIREMENT.md) when current requirements are summarized or changed.
-- Update [wiki/MVP.md](wiki/MVP.md) when scope, exclusions, or MVP workflow changes.
-- Do not edit original source material folders such as `requirement/` unless the user asks.
+- 기존 `AGENTS.md` 또는 `AGENTs.md`를 사용하고, 없으면 `AGENTS.md`를 만든다.
+- `## 위키 관리`에 프로젝트와 함께 관리하는 모든 문서가 대상임을 명시한다. 관련 문서·역할·관리 방법을 연결하며 다른 섹션과 사용자 작성 지침은 보존한다. 같은 규칙을 중복 추가하지 않는다.
+- 문서 참조에는 프로젝트 기준 상대 경로의 Markdown 링크를 사용한다.
+- CSV를 다루면 [CSV 사용법](references/csv.md)을 프로젝트에 연결하고, qsv 조회·검증, 문자열 보존, 정본·사본 구분과 변경 절차를 지침에 반영한다.
+- 온톨로지는 관련 정보의 조회·변경 전에 읽는다. 추가·수정·삭제·이름·구조·서식 변경은 사용자가 직접 구체적으로 지정하거나 명시적으로 승인한 범위에서만 수행한다. 그 밖의 변경은 이유·변경 전후·영향을 제시하고 동의를 받는다.
+- 일반 문서의 유지 작업에 온톨로지 전용 승인 절차를 확대 적용하지 않는다. 온톨로지의 동의 전에는 원문을 유지하며, 발견한 사실·무응답·일반적인 관리 요청을 동의로 간주하지 않는다.
