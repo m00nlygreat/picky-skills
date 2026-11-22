@@ -15,16 +15,11 @@ DOCUMENT_ROLES = {
     "TERMS": "는 프로젝트 용어와 GUI 표시명의 유지본이다. 용어, 명명 기준, 화면 표시명을 정리하거나 갱신할 때 이 파일을 함께 관리한다.",
     "LOG": "에는 프로젝트 관련 중대 결정사항, 새로 알아낸 사실, 방향 변경을 시간순으로 남긴다.",
 }
-ONTOLOGY_PATH = "ONTOLOGY.yaml"
-CSV_GUIDE_PATH = "wiki/CSV_GUIDE.md"
-ONTOLOGY_BULLET = "- [ONTOLOGY.yaml](ONTOLOGY.yaml)은 프로젝트의 개념·관계·데이터 소스와 찾는 방법의 유지본이다. 관련 정보를 조회하거나 변경할 때 먼저 참조한다."
-ONTOLOGY_RULES = [
-    "- 온톨로지에는 프로젝트 구조에 필요한 개념·관계·소스를 기록하고, 필요한 속성을 프로젝트에 맞게 확장한다.",
-    "- 온톨로지의 추가·수정·삭제·이름·구조·서식 변경은 구체적인 사용자 요청 또는 명시적으로 승인받은 변경안의 범위에서만 수행한다. 오탈자·서식 수정도 예외가 아니다.",
-    "- 온톨로지 변경안은 이유·변경 전후·영향을 제시하고, 동의 전에는 원문을 유지한다. 무응답·추정·새 사실의 발견·일반적인 관리 요청·과거의 포괄적 위임을 동의로 간주하지 않는다.",
-]
+DOCS_DIR = "docs"
+CSV_GUIDE_PATH = f"{DOCS_DIR}/CSV_GUIDE.md"
 WIKI_SCOPE = "- 위키는 프로젝트와 함께 관리하는 모든 문서를 대상으로 하며, 이름·형식·위치는 프로젝트 구조와 사용자 요청에 맞게 관리한다."
 GENERAL_RULES = [
+    f"- 새 프로젝트 문서의 기본 위치는 `{DOCS_DIR}/`다.",
     "- 위키 문서는 한국어로 짧고 명확하게 작성한다.",
     "- 위키의 기본 형식은 Markdown(.md)이며, CSV는 사용자 요청이 있을 때만 사용한다.",
     "- 위키 문서나 프로젝트 문서를 참조할 때는 백틱 경로 대신 마크다운 링크와 프로젝트 기준 상대 경로를 사용한다.",
@@ -34,24 +29,13 @@ CSV_RULES = [
     "- CSV 변경은 정본·사본과 기존 도우미를 확인한 뒤 수행한다. 임시 파일에서 수정하고 헤더·고유 키·수정 결과·인코딩을 검증한 뒤 교체한다. 도구의 상세 사용법은 CSV 사용법 문서를 따른다.",
 ]
 SOURCE_RULE = "- 원본 자료 폴더는 사용자가 요청하지 않는 한 수정하지 않는다."
-EMPTY_ONTOLOGY = "# 프로젝트별 구성을 사용자와 검토한 뒤 승인된 내용만 반영한다.\n개념: []\n관계: []\n소스: []\n"
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
-LEGACY_RULES = {
-    "- 이 저장소의 간단한 위키는 [wiki](wiki/)에 둔다.": WIKI_SCOPE,
-    "- 이 저장소의 간단한 위키는 " + chr(96) + "wiki/" + chr(96) + "에 둔다.": WIKI_SCOPE,
-}
-for _name, _role in DOCUMENT_ROLES.items():
-    _path = f"wiki/{_name}.md"
-    LEGACY_RULES[f"- {chr(96)}{_path}{chr(96)}{_role}"] = f"- [{_path}]({_path}){_role}"
 RULE_PREFIXES = (
     "- 위키는 프로젝트와 함께 관리하는 모든 문서를",
     "- 위키 문서는",
     "- 위키의 기본 형식은",
     "- 위키 문서나 프로젝트 문서를 참조할 때는",
     "- 원본 자료 폴더는",
-    "- 온톨로지에는",
-    "- 온톨로지의 추가·수정·삭제",
-    "- 온톨로지 변경안은",
     "- CSV 조회·검색·검증은",
     "- CSV 변경은",
 )
@@ -65,7 +49,7 @@ def project_path(project_root, raw):
         templates = Path(__file__).resolve().parents[1] / "templates"
         if (templates / f"{name.upper()}.md").is_file():
             name = name.upper()
-        path = Path("wiki") / (name + ".md")
+        path = Path(DOCS_DIR) / (name + ".md")
     elif not path.suffix:
         path = path.with_suffix(".md")
     target = (project_root / path).resolve()
@@ -78,7 +62,6 @@ def project_path(project_root, raw):
 
 def selected_documents(project_root, raw_documents):
     documents = []
-    ontology = False
     for raw in raw_documents:
         # Retain comma-separated shorthand without splitting literal file paths.
         tokens = raw.split(",") if not Path(raw).suffix and "/" not in raw and "\\" not in raw else [raw]
@@ -86,13 +69,10 @@ def selected_documents(project_root, raw_documents):
             token = token.strip()
             if not token:
                 continue
-            if token.upper() in ("ONTOLOGY", "ONTOLOGY.YAML"):
-                ontology = True
-                continue
             path = project_path(project_root, token)
             if path not in documents:
                 documents.append(path)
-    return documents, ontology
+    return documents
 
 
 def csv_headers(project_root, definitions):
@@ -114,24 +94,19 @@ def csv_headers(project_root, definitions):
 
 
 def existing_documents(project_root):
-    wiki = project_root / "wiki"
+    docs = project_root / DOCS_DIR
     found = []
-    if wiki.is_dir():
-        for candidate in sorted(wiki.rglob("*")):
-            if candidate.is_file() and not any(part.startswith(".") for part in candidate.relative_to(wiki).parts):
+    if docs.is_dir():
+        for candidate in sorted(docs.rglob("*")):
+            if candidate.is_file() and not any(part.startswith(".") for part in candidate.relative_to(docs).parts):
                 found.append(project_path(project_root, candidate.as_posix()))
-    ontology = project_root / ONTOLOGY_PATH
-    if ontology.is_file():
-        found.append(ontology)
     return found
 
 
 def document_rule(project_root, path):
     relative = path.relative_to(project_root).as_posix()
-    if relative == ONTOLOGY_PATH:
-        return ONTOLOGY_BULLET
     if relative == CSV_GUIDE_PATH:
-        return "- [CSV 사용법](wiki/CSV_GUIDE.md)에 CSV 구조 확인·qsv 조회·문자열 보존·변경·검증 절차를 정리한다. CSV 작업 전에 참조하고 프로젝트에 맞게 유지한다."
+        return f"- [CSV 사용법]({CSV_GUIDE_PATH})에 CSV 구조 확인·qsv 조회·문자열 보존·변경·검증 절차를 정리한다. CSV 작업 전에 참조하고 프로젝트에 맞게 유지한다."
     label = relative.replace("[", "\\[").replace("]", "\\]")
     link = f"[{label}]({quote(relative, safe='/')})"
     role = DOCUMENT_ROLES.get(path.stem.upper())
@@ -144,8 +119,6 @@ def render_agents_section(project_root, documents):
     lines = ["## 위키 관리", "", WIKI_SCOPE, *GENERAL_RULES]
     for path in documents:
         lines.append(document_rule(project_root, path))
-    if any(path.name == ONTOLOGY_PATH for path in documents):
-        lines.extend(ONTOLOGY_RULES)
     if any(path.suffix.lower() == ".csv" for path in documents):
         lines.extend(CSV_RULES)
     lines.append(SOURCE_RULE)
@@ -204,21 +177,16 @@ def inject_agents_section(agents_path, section):
         updated = content + separator + section.replace("\n", newline)
     else:
         start, end = bounds
-        original = content[start:end]
-        migrated = "".join(
-            LEGACY_RULES.get(line.rstrip("\r\n"), line.rstrip("\r\n"))
-            + line[len(line.rstrip("\r\n")):]
-            for line in original.splitlines(keepends=True)
-        )
-        present = {instruction_key(line) for line in migrated.splitlines() if line.startswith("- ")}
+        existing_section = content[start:end]
+        present = {instruction_key(line) for line in existing_section.splitlines() if line.startswith("- ")}
         missing = [
             line for line in section.splitlines()
             if line.startswith("- ") and instruction_key(line) not in present
         ]
         if missing:
             ending = newline * 2 if end < len(content) else newline
-            migrated = migrated.rstrip("\r\n") + newline + newline.join(missing) + ending
-        updated = content[:start] + migrated + content[end:]
+            existing_section = existing_section.rstrip("\r\n") + newline + newline.join(missing) + ending
+        updated = content[:start] + existing_section + content[end:]
     if updated == content:
         return False
     with agents_path.open("w", encoding="utf-8", newline="") as stream:
@@ -235,21 +203,18 @@ def agents_file(project_root):
 
 def main():
     parser = argparse.ArgumentParser(description="Create or register project documents and their wiki guidance.")
-    parser.add_argument("documents", nargs="*", help="Arbitrary document names or project-relative paths. Bare names use wiki/NAME.md.")
+    parser.add_argument("documents", nargs="*", help=f"Arbitrary document names or project-relative paths. Bare names use {DOCS_DIR}/NAME.md.")
     parser.add_argument("--project-root", default=".", help="Project root. Default: current directory.")
-    parser.add_argument("--ontology", action="store_true", help="Initialize or connect the special ONTOLOGY.yaml document.")
     parser.add_argument("--csv-header", nargs=2, action="append", default=[], metavar=("PATH", "HEADER"), help="Create a new CSV with an explicitly chosen header row.")
-    parser.add_argument("--force", action="store_true", help="Overwrite selected Markdown starter files only; preserve existing CSV and ontology data.")
+    parser.add_argument("--force", action="store_true", help="Overwrite selected Markdown starter files only; preserve existing non-Markdown files.")
     args = parser.parse_args()
     project_root = Path(args.project_root).resolve()
     skill_root = Path(__file__).resolve().parents[1]
-    documents, legacy_ontology = selected_documents(project_root, args.documents)
+    documents = selected_documents(project_root, args.documents)
     headers = csv_headers(project_root, args.csv_header)
     for path in headers:
         if path not in documents:
             documents.append(path)
-    if args.ontology or legacy_ontology:
-        documents.append(project_root / ONTOLOGY_PATH)
     documents = list(dict.fromkeys(documents))
 
     # Validate all creation requests before changing project files.
@@ -258,8 +223,6 @@ def main():
         if existed and not target.is_file():
             raise SystemExit(f"Document path is not a readable file: {target}")
         if existed:
-            continue
-        if target.name == ONTOLOGY_PATH:
             continue
         if target.suffix.lower() == ".csv" and target not in headers:
             raise SystemExit(f"Choose a header for the new CSV with --csv-header: {target}")
@@ -274,9 +237,7 @@ def main():
             outcomes.append(("skipped existing", target))
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        if target.name == ONTOLOGY_PATH:
-            content = EMPTY_ONTOLOGY
-        elif target.suffix.lower() == ".csv":
+        if target.suffix.lower() == ".csv":
             with target.open("x", encoding="utf-8-sig", newline="") as stream:
                 csv.writer(stream).writerow(headers[target])
             outcomes.append(("created", target))

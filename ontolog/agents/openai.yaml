@@ -1,0 +1,4 @@
+interface:
+  display_name: "Ontolog"
+  short_description: "Manage project ontology and entity specifications."
+  default_prompt: "Use $ontolog to inspect this project's ontology and consult the specifications for the entities involved."

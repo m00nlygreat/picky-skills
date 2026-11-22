@@ -1,6 +1,6 @@
 interface:
   display_name: "Wiki"
-  short_description: "Manage Markdown wiki docs; use CSV when requested."
-  default_prompt: "Use $wiki to manage this project's documents in Markdown by default, using CSV only when I request it and keeping ontology changes under my control."
+  short_description: "Manage project documents with docs/ as the default."
+  default_prompt: "Use $wiki to manage this project's documents with docs/ as the default location, using CSV only when I request it."
 policy:
   allow_implicit_invocation: true
