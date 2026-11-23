@@ -7,13 +7,18 @@ Codex에서 반복 작업을 빠르고 일관되게 처리하기 위한 실용 �
 | 스킬 | 설명 |
 | --- | --- |
 | `agentify` | 에이전트 문서를 초기화하고 기억 관리와 주기 점검을 지원합니다. 기본 `SOUL.md`의 `Voice`에 말투 규칙과 대화 예시가 들어 있습니다. |
+| `business-card-contacts` | 명함 사진의 연락처 정보를 읽고 중복을 확인해 Google Contacts에 등록합니다. |
 | `canvas` | GFM 표를 포함한 로컬 문서를 실시간 브라우저 미리보기로 엽니다. |
+| `deck-author` | md2ppt용 Markdown 발표 자료의 흐름을 설계하고 슬라이드 콘텐츠를 작성·수정합니다. |
+| `deck-reviewer` | Markdown 발표 자료를 검토하고 문장 종결, 밀도, 위계와 렌더링 문제를 집중 개선합니다. |
 | `design` | 요구사항을 화면별 STN 설계 문서로 구체화합니다. |
+| `extract-eml-attachments` | EML 이메일 파일에서 첨부 파일을 추출하고 기본 설정에 따라 첨부를 제거한 메일로 교체합니다. |
 | `gd-sync` | 기본 호출과 sync, pull, push 요청을 별도 미리보기 없이 즉시 실행하여 Google Drive와 로컬 폴더를 동기화합니다. |
 | `ia` | 서비스 기획이나 PRD를 화면 중심의 정보 구조로 정리합니다. |
 | `interact` | SSE로 화면을 실시간 갱신하고 응답을 받으며, 기본 3000 포트(점유 시 랜덤 포트)와 30분 유휴 자동 종료를 지원하는 로컬 대화형 화면을 엽니다. |
 | `korean-verbal-script` | 한국어 발표문을 조사·연결어미와 발음·호흡 중심으로 다듬고, 첫 사용 시 용어 자동 수집 여부를 물어 AGENTS.md에 기록하며 선택에 따라 TERMs.md를 관리합니다. |
 | `ontolog` | 프로젝트 온톨로지를 설치·구축하고 `AGENTS.md`에 참조 지침을 남깁니다. 온톨로지 조회·검증과 엔티티 명세 관리를 지원합니다. |
+| `ppt2pdf` | Windows에 설치된 Microsoft PowerPoint를 사용해 PowerPoint 파일을 PDF로 일괄 변환합니다. |
 | `ssaju` | 사주, 만세력, 음양력 변환과 운세 데이터를 계산합니다. |
 | `startup-advisor` | 스타트업 아이디어와 서비스 기획의 타당성을 검토합니다. |
 | `stn` | Screen Tree Notation의 작성·검증 규칙을 제공합니다. |
