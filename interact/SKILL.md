@@ -52,15 +52,15 @@ Requirements:
 
 ## Subagent Progress Publisher
 
-Use a low-effort subagent to publish progress updates while the main session owns the task, user questions, and `wait` calls.
+Use a low-effort subagent to publish progress updates when the current session permits it; otherwise the main session publishes them directly. The main session always owns the task, user questions, and `wait` calls.
 
 ### Detect scope and install
 
 - Identify the active harness and the skill installation path exposed by the current session. Use that path lexically to decide scope; do not resolve a symlink or Windows junction to its source target. Treat `.agents/skills`, `.codex/skills`, `.claude/skills`, and `.opencode/skills` under a user's harness configuration as global, and the same locations under a project root as project scope. If scope remains unclear, ask the user.
-- Check model availability and effective reasoning effort in the active harness before installing. Prefer `gpt-6.2-sol` at `low` for Codex, Haiku at `low` for Claude Code, and the active OpenCode provider's Haiku or Sol model with its lowest supported variant. If the model or effective effort is uncertain, ask before installing or invoking the publisher.
+- Check model availability and effective reasoning effort in the active harness before installing a subagent. Prefer `gpt-6.2-sol` at `low` for Codex, Haiku at `low` for Claude Code, and the active OpenCode provider's Haiku or Sol model with its lowest supported variant. If the model or effective effort is uncertain, do not install or invoke the subagent; keep progress updates going through the main session instead.
 - Run `install-subagent.js check` first. This command is read-only. Pass the active skill path, harness, scope, selected model, and effort explicitly; pass `--agent-dir` when the harness exposes a custom agent directory. Codex uses `CODEX_HOME/agents` globally or `.codex/agents` in a project. Claude Code uses `CLAUDE_CONFIG_DIR/agents` globally or `.claude/agents`. OpenCode uses `XDG_CONFIG_HOME/opencode/agents` globally or `.opencode/agents`.
 - Install only after the check is ready. The helper creates a missing definition, reuses a compatible existing one, and never overwrites an incompatible file. The names `interact-progress-global` and `interact-progress-project` keep the two scopes separate.
-- After installation, verify that the active session can invoke the named agent and confirm the model and effective effort from the runtime result when available. If the definition is not callable until the harness reloads, ask whether to reload and retry or skip persistent progress updates. In Codex sessions without custom-agent selection, offer a default subagent with explicit low reasoning for this turn.
+- After installation, verify that the active session can invoke the named agent and confirm the model and effective effort from the runtime result when available. If the definition is not callable in this session, or delegation is unavailable or disallowed, continue in progress mode and use the main session to publish updates. In Codex sessions without custom-agent selection, use a default subagent with explicit low reasoning for this turn when permitted; otherwise use the same main-session fallback.
 
 Example checks (replace the paths and values with the active session's results):
 
@@ -72,7 +72,8 @@ node "<active-skill-path>\scripts\install-subagent.js" install --harness codex -
 ### Publish and sequence updates
 
 - The main session opens the progress screen once with `ask`, using the stable interaction ID and a fixed set of `info` fields for phase, confirmed facts, and next action. Reuse that ID for every progress publication.
-- Pass only the interaction ID, current phase, confirmed facts, and next action to the publisher. It prepares a short `info`-only schema, calls `progress-update --id <id> --schema-json <json>` exactly once, and returns only the publication result. The publisher never asks the user a question or calls `wait`.
+- When a subagent is callable and permitted, pass only the interaction ID, current phase, confirmed facts, and next action to it. It prepares a short `info`-only schema, calls `progress-update --id <id> --schema-json <json>` exactly once, and returns only the publication result. The publisher never asks the user a question or calls `wait`.
+- If no subagent is installed, callable, or permitted, the main session prepares that same short `info`-only schema and calls `progress-update --id <id> --schema-json <json>` itself at the usual milestones. Do not stop or omit periodic updates just because the subagent path is unavailable.
 - Reuse the same subagent for later updates when the harness supports follow-up calls. Run it in the background when available, but keep at most one publisher call in flight for an interaction ID.
 - Before changing the screen to a question, stop scheduling progress updates and wait for the active publication to finish or cancel it. Then use the main session to call `ask` with the same ID and handle the answer with `wait --after-seq <last-seq>`. The server serializes writes and rejects a progress update when that ID no longer refers to the active info-only screen.
 - The browser acknowledges SSE events. `progress-update` reports server dispatch information; `metrics --id <id>` reads the measured request-to-browser-receipt and SSE-write-to-ack times from `.interact/events.jsonl`.
