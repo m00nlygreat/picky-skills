@@ -1,6 +1,6 @@
 ---
 name: interact
-description: Open a reusable local GUI for progress updates and ongoing human-in-the-loop interaction. Use progress mode to keep the user-facing screen current during multi-step work, and use human-in-the-loop mode when Codex needs the user to choose between visual options, answer structured questions, approve a direction, or give iterative feedback. The skill runs a project-scoped local server, updates the browser screen dynamically, supports multiple user submissions, reads submitted JSON answers before continuing, and shuts down after 30 minutes without an update or response.
+description: Open a reusable local GUI for progress updates and ongoing human-in-the-loop interaction. Use low-effort harness-specific subagents to publish info-only progress updates when configured, and keep user questions and waits in the main session. Use human-in-the-loop mode when Codex needs the user to choose between options, answer structured questions, or give iterative feedback. The skill runs a project-scoped local server, updates the browser screen dynamically, supports multiple user submissions, reads submitted JSON answers before continuing, and shuts down after 30 minutes without an update or response.
 ---
 
 # Interact
@@ -49,6 +49,33 @@ Requirements:
 - Do not block on `wait` in progress mode unless the next step genuinely depends on user input.
 - Prefer `info` fields for status-only screens, because they do not require submission.
 - Keep status schemas short: current phase, what changed, next action, and any notable risk or blocker.
+
+## Subagent Progress Publisher
+
+Use a low-effort subagent to publish progress updates while the main session owns the task, user questions, and `wait` calls.
+
+### Detect scope and install
+
+- Identify the active harness and the skill installation path exposed by the current session. Use that path lexically to decide scope; do not resolve a symlink or Windows junction to its source target. Treat `.agents/skills`, `.codex/skills`, `.claude/skills`, and `.opencode/skills` under a user's harness configuration as global, and the same locations under a project root as project scope. If scope remains unclear, ask the user.
+- Check model availability and effective reasoning effort in the active harness before installing. Prefer `gpt-6.2-sol` at `low` for Codex, Haiku at `low` for Claude Code, and the active OpenCode provider's Haiku or Sol model with its lowest supported variant. If the model or effective effort is uncertain, ask before installing or invoking the publisher.
+- Run `install-subagent.js check` first. This command is read-only. Pass the active skill path, harness, scope, selected model, and effort explicitly; pass `--agent-dir` when the harness exposes a custom agent directory. Codex uses `CODEX_HOME/agents` globally or `.codex/agents` in a project. Claude Code uses `CLAUDE_CONFIG_DIR/agents` globally or `.claude/agents`. OpenCode uses `XDG_CONFIG_HOME/opencode/agents` globally or `.opencode/agents`.
+- Install only after the check is ready. The helper creates a missing definition, reuses a compatible existing one, and never overwrites an incompatible file. The names `interact-progress-global` and `interact-progress-project` keep the two scopes separate.
+- After installation, verify that the active session can invoke the named agent and confirm the model and effective effort from the runtime result when available. If the definition is not callable until the harness reloads, ask whether to reload and retry or skip persistent progress updates. In Codex sessions without custom-agent selection, offer a default subagent with explicit low reasoning for this turn.
+
+Example checks (replace the paths and values with the active session's results):
+
+```powershell
+node "<active-skill-path>\scripts\install-subagent.js" check --harness codex --scope global --skill-path "<active-skill-path>" --model gpt-6.2-sol --effort low
+node "<active-skill-path>\scripts\install-subagent.js" install --harness codex --scope global --skill-path "<active-skill-path>" --model gpt-6.2-sol --effort low
+```
+
+### Publish and sequence updates
+
+- The main session opens the progress screen once with `ask`, using the stable interaction ID and a fixed set of `info` fields for phase, confirmed facts, and next action. Reuse that ID for every progress publication.
+- Pass only the interaction ID, current phase, confirmed facts, and next action to the publisher. It prepares a short `info`-only schema, calls `progress-update --id <id> --schema-json <json>` exactly once, and returns only the publication result. The publisher never asks the user a question or calls `wait`.
+- Reuse the same subagent for later updates when the harness supports follow-up calls. Run it in the background when available, but keep at most one publisher call in flight for an interaction ID.
+- Before changing the screen to a question, stop scheduling progress updates and wait for the active publication to finish or cancel it. Then use the main session to call `ask` with the same ID and handle the answer with `wait --after-seq <last-seq>`. The server serializes writes and rejects a progress update when that ID no longer refers to the active info-only screen.
+- The browser acknowledges SSE events. `progress-update` reports server dispatch information; `metrics --id <id>` reads the measured request-to-browser-receipt and SSE-write-to-ack times from `.interact/events.jsonl`.
 - Reuse the same interaction id so the user's browser tab keeps changing in place.
 
 Example progress-only schema:
@@ -101,10 +128,14 @@ Use the bundled script:
 node .agents/skills/interact/scripts/interact-server.js ensure
 node .agents/skills/interact/scripts/interact-server.js ask --schema path/to/schema.json
 node .agents/skills/interact/scripts/interact-server.js update --id <interaction-id> --schema path/to/next-schema.json
+node .agents/skills/interact/scripts/interact-server.js progress-update --id <interaction-id> --schema-json '{"title":"...","fields":[{"id":"phase","type":"info","label":"Phase"}]}'
+node .agents/skills/interact/scripts/interact-server.js metrics [--id <interaction-id>]
 node .agents/skills/interact/scripts/interact-server.js wait --id <interaction-id>
 node .agents/skills/interact/scripts/interact-server.js wait --id <interaction-id> --after-seq <last-seq>
 node .agents/skills/interact/scripts/interact-server.js status
 node .agents/skills/interact/scripts/interact-server.js stop
+node "<active-skill-path>/scripts/install-subagent.js" check --harness <codex|claude|opencode> --scope <global|project> --skill-path "<active-skill-path>" --model <verified-model> --effort <verified-effort>
+node "<active-skill-path>/scripts/install-subagent.js" install --harness <codex|claude|opencode> --scope <global|project> --skill-path "<active-skill-path>" --model <verified-model> --effort <verified-effort>
 ```
 
 The browser uses `EventSource` at `/api/interactions/<interaction-id>/events` for live updates. The endpoint sends JSON interaction payloads, keeps the connection alive with heartbeat comments, and supports automatic client reconnection. Answer submission remains a normal `POST` request.

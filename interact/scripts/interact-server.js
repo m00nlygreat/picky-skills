@@ -16,7 +16,7 @@ const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
 
 main().catch((error) => {
   console.error(error.message || error);
-  process.exit(1);
+  process.exitCode = 1;
 });
 
 async function main() {
@@ -59,9 +59,11 @@ async function main() {
     const state = await ensureServer(root, args);
     const schema = await readSchema(args);
     const interaction = normalizeInteraction(schema, args);
+    const requestStartedAt = Date.now();
     await postJson(`${state.url}/api/interactions`, {
       interaction,
       clearAnswers: args["keep-answers"] ? false : true,
+      requestStartedAt,
     });
     const result = {
       id: interaction.id,
@@ -87,7 +89,8 @@ async function main() {
     const schema = await readSchema(args);
     const id = required(args.id || schema.id, "--id or schema.id is required for update");
     const interaction = normalizeInteraction({ ...schema, id }, args);
-    await postJson(`${state.url}/api/interactions/${encodeURIComponent(id)}`, { interaction });
+    const requestStartedAt = Date.now();
+    await postJson(`${state.url}/api/interactions/${encodeURIComponent(id)}`, { interaction, requestStartedAt });
     printJson({
       id,
       url: `${state.url}/i/${encodeURIComponent(id)}`,
@@ -96,6 +99,37 @@ async function main() {
       transcriptFile: path.join(dirs.answers, `${id}.jsonl`),
       stateFile: dirs.stateFile,
     });
+    return;
+  }
+
+  if (command === "progress-update") {
+    const state = await ensureServer(root, args);
+    const schema = await readSchema(args);
+    const id = required(args.id || schema.id, "--id or schema.id is required for progress-update");
+    const interaction = normalizeInteraction({ ...schema, id }, args);
+    if (!isInfoInteraction(interaction)) {
+      throw new Error("progress-update accepts info-only schemas");
+    }
+    const requestStartedAt = Date.now();
+    const publication = await postJson(`${state.url}/api/interactions/${encodeURIComponent(id)}/progress`, {
+      interaction,
+      requestStartedAt,
+    });
+    printJson({
+      ...publication,
+      url: `${state.url}/i/${encodeURIComponent(id)}`,
+      markdownLink: `[Open interact GUI](${state.url}/i/${encodeURIComponent(id)})`,
+      answerFile: path.join(dirs.answers, `${id}.json`),
+      transcriptFile: path.join(dirs.answers, `${id}.jsonl`),
+      stateFile: dirs.stateFile,
+    });
+    return;
+  }
+
+  if (command === "metrics") {
+    const id = args.id ? String(args.id) : null;
+    const metrics = await readEventMetrics(dirs, id);
+    printJson({ id, metrics });
     return;
   }
 
@@ -177,12 +211,32 @@ async function serve(root, options) {
   let inactivityTimer;
   let shutdownPromise;
   const sseClients = new Map();
+  const eventMetrics = new Map();
+  let writeQueue = Promise.resolve();
+
+  const serializeWrites = (write) => {
+    const current = writeQueue.then(write, write);
+    writeQueue = current.catch(() => {});
+    return current;
+  };
+
+  const rememberPublication = (payload, requestStartedAt) => {
+    const key = metricKey(payload.id, payload.updatedAt);
+    eventMetrics.set(key, {
+      id: payload.id,
+      updatedAt: payload.updatedAt,
+      requestStartedAt: Number(requestStartedAt) || Date.now(),
+      writeStartedAt: Date.now(),
+      sseSentAt: null,
+    });
+  };
 
   const broadcastInteraction = async (id) => {
     const clients = sseClients.get(id);
-    if (!clients || clients.size === 0) return;
+    if (!clients || clients.size === 0) return 0;
+    const clientCount = clients.size;
     const interaction = await readInteraction(dirs, id);
-    if (!interaction) return;
+    if (!interaction) return 0;
     const message = `data: ${JSON.stringify(interaction)}\n\n`;
     for (const client of [...clients]) {
       try {
@@ -192,6 +246,7 @@ async function serve(root, options) {
       }
     }
     if (clients.size === 0) sseClients.delete(id);
+    return clientCount;
   };
 
   const openInteractionStream = async (id, res) => {
@@ -271,40 +326,123 @@ async function serve(root, options) {
       }
 
       if (req.method === "POST" && requestUrl.pathname === "/api/interactions") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        const payload = normalizeInteraction(body.interaction || body, {});
-        await writeJson(path.join(dirs.prompts, `${payload.id}.json`), payload);
-        await writeJson(dirs.activeFile, { id: payload.id, updatedAt: new Date().toISOString() });
-        await broadcastInteraction(payload.id);
-        if (body.clearAnswers !== false) {
-          await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
-          await rmIfExists(path.join(dirs.answers, `${payload.id}.jsonl`));
-        }
-        markActivity();
-        return sendJson(res, {
-          ok: true,
-          id: payload.id,
-          url: `${url}/i/${encodeURIComponent(payload.id)}`,
-          markdownLink: `[Open interact GUI](${url}/i/${encodeURIComponent(payload.id)})`,
+        const result = await serializeWrites(async () => {
+          const body = JSON.parse(await readBody(req) || "{}");
+          const payload = normalizeInteraction(body.interaction || body, {});
+          const previous = await readInteraction(dirs, payload.id);
+          if (previous) {
+            payload.createdAt = previous.createdAt;
+            payload.updatedAt = nextUpdatedAt(previous.updatedAt, payload.updatedAt);
+          }
+          await writeJson(path.join(dirs.prompts, `${payload.id}.json`), payload);
+          await writeJson(dirs.activeFile, { id: payload.id, updatedAt: new Date().toISOString() });
+          rememberPublication(payload, body.requestStartedAt);
+          const sseClients = await broadcastInteraction(payload.id);
+          const measurement = eventMetrics.get(metricKey(payload.id, payload.updatedAt));
+          if (measurement) measurement.sseSentAt = Date.now();
+          if (body.clearAnswers !== false) {
+            await rmIfExists(path.join(dirs.answers, `${payload.id}.json`));
+            await rmIfExists(path.join(dirs.answers, `${payload.id}.jsonl`));
+          }
+          markActivity();
+          return {
+            ok: true,
+            id: payload.id,
+            url: `${url}/i/${encodeURIComponent(payload.id)}`,
+            markdownLink: `[Open interact GUI](${url}/i/${encodeURIComponent(payload.id)})`,
+            publication: publicationSummary(measurement, sseClients),
+          };
         });
+        return sendJson(res, result);
       }
 
       if (req.method === "POST" && requestUrl.pathname.startsWith("/api/interactions/")) {
         const parts = requestUrl.pathname.split("/").filter(Boolean);
         const id = decodeURIComponent(parts[2] || "");
-        if (parts.length === 3) {
-          const body = JSON.parse(await readBody(req) || "{}");
-          const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
-          await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
-          await writeJson(dirs.activeFile, { id, updatedAt: new Date().toISOString() });
-          await broadcastInteraction(id);
-          markActivity();
-          return sendJson(res, {
-            ok: true,
-            id,
-            url: `${url}/i/${encodeURIComponent(id)}`,
-            markdownLink: `[Open interact GUI](${url}/i/${encodeURIComponent(id)})`,
+        if (parts.length === 4 && parts[3] === "progress") {
+          const result = await serializeWrites(async () => {
+            const existing = await readInteraction(dirs, id);
+            if (!existing) return { status: 404, body: { error: "interaction not found" } };
+            const active = await readJson(dirs.activeFile, null);
+            if (active?.id !== id || !isInfoInteraction(existing)) {
+              return { status: 409, body: { error: "progress updates require the active info-only screen" } };
+            }
+
+            const body = JSON.parse(await readBody(req) || "{}");
+            const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
+            if (!isInfoInteraction(payload)) {
+              return { status: 400, body: { error: "progress updates accept info-only schemas" } };
+            }
+            payload.createdAt = existing.createdAt;
+            payload.updatedAt = nextUpdatedAt(existing.updatedAt, payload.updatedAt);
+            await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
+            rememberPublication(payload, body.requestStartedAt);
+            const sseClients = await broadcastInteraction(id);
+            const measurement = eventMetrics.get(metricKey(id, payload.updatedAt));
+            if (measurement) measurement.sseSentAt = Date.now();
+            markActivity();
+            return {
+              status: 200,
+              body: {
+                ok: true,
+                id,
+                updatedAt: payload.updatedAt,
+                publication: publicationSummary(measurement, sseClients),
+              },
+            };
           });
+          return sendJson(res, result.body, result.status);
+        }
+
+        if (parts.length === 5 && parts[3] === "events" && parts[4] === "ack") {
+          const body = JSON.parse(await readBody(req) || "{}");
+          const metric = eventMetrics.get(metricKey(id, String(body.updatedAt || "")));
+          if (!metric) return sendJson(res, { ok: true, recorded: false });
+          if (metric.sseReceivedAt) return sendJson(res, { ok: true, recorded: false, metric: metric.record });
+          const sseReceivedAt = Number(body.receivedAt) || Date.now();
+          const ackReceivedAt = Date.now();
+          const record = {
+            id,
+            updatedAt: metric.updatedAt,
+            requestStartedAt: metric.requestStartedAt,
+            writeStartedAt: metric.writeStartedAt,
+            sseSentAt: metric.sseSentAt,
+            sseReceivedAt,
+            ackReceivedAt,
+            requestToSseReceiveMs: Math.max(0, sseReceivedAt - metric.requestStartedAt),
+            sseWriteToAckMs: metric.sseSentAt === null ? null : Math.max(0, ackReceivedAt - metric.sseSentAt),
+          };
+          metric.sseReceivedAt = sseReceivedAt;
+          metric.record = record;
+          await appendJsonLine(dirs.eventMetricsFile, record);
+          return sendJson(res, { ok: true, recorded: true, metric: record });
+        }
+
+        if (parts.length === 3) {
+          const result = await serializeWrites(async () => {
+            const body = JSON.parse(await readBody(req) || "{}");
+            const previous = await readInteraction(dirs, id);
+            const payload = normalizeInteraction({ ...(body.interaction || body), id }, {});
+            if (previous) {
+              payload.createdAt = previous.createdAt;
+              payload.updatedAt = nextUpdatedAt(previous.updatedAt, payload.updatedAt);
+            }
+            await writeJson(path.join(dirs.prompts, `${id}.json`), payload);
+            await writeJson(dirs.activeFile, { id, updatedAt: new Date().toISOString() });
+            rememberPublication(payload, body.requestStartedAt);
+            const sseClients = await broadcastInteraction(id);
+            const measurement = eventMetrics.get(metricKey(id, payload.updatedAt));
+            if (measurement) measurement.sseSentAt = Date.now();
+            markActivity();
+            return {
+              ok: true,
+              id,
+              url: `${url}/i/${encodeURIComponent(id)}`,
+              markdownLink: `[Open interact GUI](${url}/i/${encodeURIComponent(id)})`,
+              publication: publicationSummary(measurement, sseClients),
+            };
+          });
+          return sendJson(res, result);
         }
       }
 
@@ -437,6 +575,38 @@ function normalizeInteraction(schema, args) {
     fields,
     createdAt: schema.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function isInfoInteraction(interaction) {
+  return Array.isArray(interaction?.fields)
+    && interaction.fields.length > 0
+    && interaction.fields.every((field) => field.type === "info");
+}
+
+function nextUpdatedAt(previous, candidate) {
+  const previousTime = Date.parse(previous || "");
+  const candidateTime = Date.parse(candidate || "");
+  const nextTime = Number.isFinite(previousTime) && candidateTime <= previousTime
+    ? previousTime + 1
+    : candidateTime;
+  return new Date(nextTime).toISOString();
+}
+
+function metricKey(id, updatedAt) {
+  return `${id}:${updatedAt}`;
+}
+
+function publicationSummary(metric, sseClients) {
+  return {
+    updatedAt: metric?.updatedAt || null,
+    sseClients,
+    requestStartedAt: metric?.requestStartedAt || null,
+    sseSentAt: metric?.sseSentAt || null,
+    requestToSseWriteMs: metric?.sseSentAt && metric?.requestStartedAt
+      ? Math.max(0, metric.sseSentAt - metric.requestStartedAt)
+      : null,
+    sseReceiveMetric: "written to .interact/events.jsonl when the browser acknowledges the SSE event",
   };
 }
 
@@ -597,6 +767,7 @@ function getDirs(root) {
     dir,
     prompts: path.join(dir, "prompts"),
     answers: path.join(dir, "answers"),
+    eventMetricsFile: path.join(dir, "events.jsonl"),
     stateFile: path.join(dir, "state.json"),
     activeFile: path.join(dir, "active.json"),
   };
@@ -624,6 +795,17 @@ async function readLatestAnswer(dirs, id, afterSeq = 0) {
   if (!answer) return null;
   if (Number(answer.seq || 0) <= Number(afterSeq || 0)) return null;
   return answer;
+}
+
+async function readEventMetrics(dirs, id = null) {
+  try {
+    const contents = await fsp.readFile(dirs.eventMetricsFile, "utf8");
+    return contents.split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line))
+      .filter((metric) => !id || metric.id === id);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
 }
 
 async function writeJson(file, value) {
@@ -900,6 +1082,7 @@ function renderPage(interaction) {
           if (!next) return;
           const currentId = interaction?.id || location.pathname.split("/").pop();
           if (next.id !== currentId) return;
+          acknowledgeEvent(next);
           applyInteraction(next);
         } catch {
           // Ignore malformed updates and keep the current screen.
@@ -913,6 +1096,15 @@ function renderPage(interaction) {
           connectInteractionStream();
         }, 1000);
       };
+    }
+
+    function acknowledgeEvent(data) {
+      if (!data || !data.id || !data.updatedAt) return;
+      fetch("/api/interactions/" + encodeURIComponent(data.id) + "/events/ack", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ updatedAt: data.updatedAt, receivedAt: Date.now() })
+      }).catch(() => {});
     }
 
     function applyInteraction(next) {
@@ -952,10 +1144,16 @@ function renderPage(interaction) {
       const status = document.createElement("div");
       status.id = "status";
       status.setAttribute("role", "status");
-      const submit = document.createElement("button");
-      submit.type = "submit";
-      submit.textContent = data.submitLabel || "Submit";
-      actions.append(status, submit);
+      const hasAnswerFields = (data.fields || []).some((field) => field.type !== "info");
+      actions.append(status);
+      if (hasAnswerFields) {
+        const submit = document.createElement("button");
+        submit.type = "submit";
+        submit.textContent = data.submitLabel || "Submit";
+        actions.append(submit);
+      } else {
+        status.textContent = "진행 상황을 표시하는 화면입니다.";
+      }
       form.append(actions);
       form.addEventListener("submit", async (event) => {
         event.preventDefault();
@@ -1188,6 +1386,8 @@ function printHelp() {
   node interact-server.js ask --schema schema.json [--wait] [--timeout 600]
   node interact-server.js ask --schema-json '{"title":"...","fields":[...]}' [--wait]
   node interact-server.js update --id <interaction-id> --schema schema.json
+  node interact-server.js progress-update --id <interaction-id> --schema-json '{"title":"...","fields":[{"id":"status","type":"info","label":"..."}]}'
+  node interact-server.js metrics [--id <interaction-id>]
   node interact-server.js wait --id <interaction-id> [--after-seq 1] [--timeout 600]
   node interact-server.js status
   node interact-server.js stop
